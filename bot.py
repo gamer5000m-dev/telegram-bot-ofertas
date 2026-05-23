@@ -1,5 +1,6 @@
-import os
+import threading
 import time
+import os
 import asyncio
 import requests
 import re
@@ -56,6 +57,21 @@ def salvar(link):
     cursor.execute("INSERT OR IGNORE INTO ofertas(link) VALUES(?)", (link,))
     conn.commit()
 
+# ================= VALIDAÇÕES =================
+
+def imagem_valida(url):
+    if not url:
+        return False
+    url = url.split("?")[0].lower()
+    return url.endswith((".jpg", ".jpeg", ".png"))
+
+def link_valido(link):
+    if not link:
+        return False
+    if link.startswith("http") and "promobit" in link:
+        return True
+    return False
+
 # ================= SCRAP =================
 
 def pegar_ofertas():
@@ -80,19 +96,21 @@ def pegar_ofertas():
             if link.startswith("/"):
                 link = URL + link
 
+            if not link_valido(link):
+                continue
+
             preco = "Preço não encontrado"
             p = re.findall(r"R\$\s?\d+[.,]?\d*", titulo)
             if p:
                 preco = p[0]
 
             img = item.find("img")
-            imagem = (
-                img.get("data-src")
-                if img and img.get("data-src")
-                else img.get("src") if img else None
-            )
+            imagem = None
 
-            if not imagem:
+            if img:
+                imagem = img.get("data-src") or img.get("src")
+
+            if not imagem or not imagem_valida(imagem):
                 imagem = "https://static.promobit.com.br/assets/img/promobit-logo.png"
 
             ofertas.append({
@@ -102,12 +120,12 @@ def pegar_ofertas():
                 "imagem": imagem
             })
 
-        except Exception as e:
-            print("SCRAP ERROR:", e)
+        except:
+            continue
 
     return ofertas
 
-# ================= BOT LOOP (SEM THREAD) =================
+# ================= BOT LOOP =================
 
 async def bot_loop():
 
@@ -170,4 +188,5 @@ async def main():
     await bot_loop()
 
 if __name__ == "__main__":
+    print("INICIANDO SISTEMA...", flush=True)
     asyncio.run(main())
