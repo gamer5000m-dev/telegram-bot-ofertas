@@ -1,7 +1,7 @@
 import threading
+import asyncio
 import time
 import os
-import asyncio
 import requests
 import re
 import sqlite3
@@ -27,8 +27,8 @@ def run_web():
 
 # ================= CONFIG =================
 
-TOKEN = "8391542912:AAH1cduJ0E7naPhA0z6uezCgkbLn1BjyQDE"
-CHAT_ID = -1003914285353
+TOKEN = "SEU_TOKEN_AQUI"
+CHAT_ID = -1001234567890
 
 URL = "https://www.promobit.com.br"
 TEMPO = 300
@@ -59,37 +59,15 @@ def salvar(link):
     cursor.execute("INSERT OR IGNORE INTO ofertas(link) VALUES(?)", (link,))
     conn.commit()
 
-# ================= RATE LIMIT ANTI-BAN =================
+# ================= RATE LIMIT =================
 
 async def rate_limit():
-    await asyncio.sleep(random.uniform(8, 18))
+    await asyncio.sleep(random.uniform(8, 16))
 
-# ================= VALIDAÇÃO DE IMAGEM =================
-
-def imagem_valida(url):
-    try:
-        if not url:
-            return False
-
-        headers = {"User-Agent": "Mozilla/5.0"}
-
-        r = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
-
-        if r.status_code != 200:
-            return False
-
-        content_type = r.headers.get("Content-Type", "")
-        return content_type.startswith("image/")
-
-    except:
-        return False
-
-# ================= LINK =================
+# ================= SCRAPING =================
 
 def link_valido(link):
     return link and link.startswith("http") and "promobit" in link
-
-# ================= SCRAPING =================
 
 def pegar_ofertas():
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -122,9 +100,9 @@ def pegar_ofertas():
                 preco = p[0]
 
             img = None
-            image_tag = item.find("img")
-            if image_tag:
-                img = image_tag.get("data-src") or image_tag.get("src")
+            tag_img = item.find("img")
+            if tag_img:
+                img = tag_img.get("data-src") or tag_img.get("src")
 
             ofertas.append({
                 "titulo": titulo,
@@ -137,6 +115,29 @@ def pegar_ofertas():
             continue
 
     return ofertas
+
+# ================= DOWNLOAD IMAGEM (CORREÇÃO FINAL) =================
+
+def baixar_imagem(url):
+    try:
+        if not url:
+            return None
+
+        headers = {"User-Agent": "Mozilla/5.0"}
+
+        r = requests.get(url, headers=headers, timeout=10, stream=True)
+
+        if r.status_code != 200:
+            return None
+
+        content_type = r.headers.get("Content-Type", "")
+        if not content_type.startswith("image/"):
+            return None
+
+        return r.content
+
+    except:
+        return None
 
 # ================= BOT LOOP =================
 
@@ -170,19 +171,22 @@ async def bot_loop():
                     InlineKeyboardButton("🛒 Comprar", url=o["link"])
                 ]])
 
-                img = o["imagem"]
-
-                # valida imagem real
-                if not imagem_valida(img):
-                    img = FALLBACK_IMAGE
+                img_bytes = baixar_imagem(o["imagem"])
 
                 try:
-                    await bot.send_photo(
-                        chat_id=CHAT_ID,
-                        photo=img,
-                        caption=msg[:1020],
-                        reply_markup=keyboard
-                    )
+                    if img_bytes:
+                        await bot.send_photo(
+                            chat_id=CHAT_ID,
+                            photo=img_bytes,
+                            caption=msg[:1020],
+                            reply_markup=keyboard
+                        )
+                    else:
+                        await bot.send_message(
+                            chat_id=CHAT_ID,
+                            text=msg + f"\n\n🛒 {o['link']}",
+                            reply_markup=keyboard
+                        )
 
                     salvar(o["link"])
                     enviados += 1
