@@ -1,7 +1,6 @@
 import threading
 import time
 import os
-import asyncio
 import requests
 import re
 import sqlite3
@@ -9,9 +8,8 @@ import sqlite3
 from flask import Flask
 from bs4 import BeautifulSoup
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.request import HTTPXRequest
-from telegram import Bot
 
 # ================= FLASK =================
 
@@ -23,7 +21,7 @@ def home():
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
 
 # ================= CONFIG =================
 
@@ -33,7 +31,12 @@ CHAT_ID = -1003914285353
 URL = "https://www.promobit.com.br"
 TEMPO = 300
 LIMITE = 3
+
 AFILIADO = "?utm_source=telegram&utm_medium=bot"
+
+# ================= TELEGRAM BOT =================
+
+bot = Bot(token=TOKEN, request=HTTPXRequest())
 
 # ================= BANCO =================
 
@@ -106,21 +109,15 @@ def pegar_ofertas():
 
     return ofertas
 
-# ================= BOT (ASYNC CORRETO) =================
+# ================= BOT LOOP =================
 
-async def rodar_bot_async():
-
-    bot = Bot(
-        token=TOKEN,
-        request=HTTPXRequest()
-    )
-
-    print("BOT PROFISSIONAL INICIADO")
+def rodar_bot():
+    print("BOT INICIADO", flush=True)
 
     while True:
         try:
             ofertas = pegar_ofertas()
-            print("OFERTAS:", len(ofertas))
+            print("OFERTAS ENCONTRADAS:", len(ofertas), flush=True)
 
             enviados = 0
 
@@ -132,20 +129,20 @@ async def rodar_bot_async():
                 if ja_enviado(o["link"]):
                     continue
 
-                mensagem = f"""🔥 OFERTA VERIFICADA
+                mensagem = f"""🔥 OFERTA NOVA
 
 📦 {o['titulo']}
 
 💰 {o['preco']}
 
-⚡ Promoção limitada
+⚡ Promoção por tempo limitado
 """
 
                 teclado = InlineKeyboardMarkup([[
                     InlineKeyboardButton("🛒 Comprar agora", url=o["link"])
                 ]])
 
-                await bot.send_photo(
+                bot.send_photo(
                     chat_id=CHAT_ID,
                     photo=o["imagem"],
                     caption=mensagem,
@@ -155,26 +152,24 @@ async def rodar_bot_async():
                 salvar(o["link"])
                 enviados += 1
 
-                print("ENVIADO:", o["titulo"])
-                await asyncio.sleep(10)
+                print("ENVIADO:", o["titulo"], flush=True)
 
-            print("AGUARDANDO...")
-            await asyncio.sleep(TEMPO)
+                time.sleep(10)
+
+            print("AGUARDANDO...", flush=True)
+            time.sleep(TEMPO)
 
         except Exception as e:
-            print("ERRO:", repr(e))
-            await asyncio.sleep(30)
-
-def rodar_bot():
-    asyncio.run(rodar_bot_async())
+            print("ERRO:", repr(e), flush=True)
+            time.sleep(30)
 
 # ================= START =================
 
 if __name__ == "__main__":
-    print("INICIANDO SISTEMA...")
+    print("INICIANDO SISTEMA...", flush=True)
 
     threading.Thread(target=run_web, daemon=True).start()
     threading.Thread(target=rodar_bot, daemon=True).start()
 
     while True:
-        time.sleep(999999)
+        time.sleep(3600)
