@@ -1,6 +1,5 @@
-import threading
-import time
 import os
+import time
 import asyncio
 import requests
 import re
@@ -33,9 +32,7 @@ URL = "https://www.promobit.com.br"
 TEMPO = 300
 LIMITE = 3
 
-AFILIADO = "?utm_source=telegram&utm_medium=bot"
-
-# ================= TELEGRAM (ASYNC CORRETO) =================
+AFILIADO = "?utm_source=telegram"
 
 app_bot = Application.builder().token(TOKEN).build()
 
@@ -105,21 +102,21 @@ def pegar_ofertas():
                 "imagem": imagem
             })
 
-        except:
-            continue
+        except Exception as e:
+            print("SCRAP ERROR:", e)
 
     return ofertas
 
-# ================= BOT LOOP (ASYNC REAL) =================
+# ================= BOT LOOP (SEM THREAD) =================
 
-async def rodar_bot_async():
+async def bot_loop():
 
-    print("BOT INICIADO")
+    print("BOT INICIADO", flush=True)
 
     while True:
         try:
             ofertas = pegar_ofertas()
-            print("OFERTAS:", len(ofertas))
+            print("OFERTAS:", len(ofertas), flush=True)
 
             enviados = 0
 
@@ -131,49 +128,46 @@ async def rodar_bot_async():
                 if ja_enviado(o["link"]):
                     continue
 
-                mensagem = f"""🔥 OFERTA NOVA
+                msg = f"""🔥 OFERTA NOVA
 
 📦 {o['titulo']}
 
 💰 {o['preco']}
-
-⚡ Promoção limitada
 """
 
-                teclado = InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🛒 Comprar agora", url=o["link"])
+                keyboard = InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🛒 Comprar", url=o["link"])
                 ]])
 
                 await app_bot.bot.send_photo(
                     chat_id=CHAT_ID,
                     photo=o["imagem"],
-                    caption=mensagem,
-                    reply_markup=teclado
+                    caption=msg,
+                    reply_markup=keyboard
                 )
 
                 salvar(o["link"])
                 enviados += 1
 
-                print("ENVIADO:", o["titulo"])
+                print("ENVIADO:", o["titulo"], flush=True)
+
                 await asyncio.sleep(10)
 
-            print("AGUARDANDO...")
+            print("AGUARDANDO...", flush=True)
             await asyncio.sleep(TEMPO)
 
         except Exception as e:
-            print("ERRO:", repr(e))
+            print("ERRO BOT:", repr(e), flush=True)
             await asyncio.sleep(30)
-
-def rodar_bot():
-    asyncio.run(rodar_bot_async())
 
 # ================= START =================
 
-if __name__ == "__main__":
-    print("INICIANDO SISTEMA...")
+async def main():
+    import threading
 
     threading.Thread(target=run_web, daemon=True).start()
-    threading.Thread(target=rodar_bot, daemon=True).start()
 
-    while True:
-        time.sleep(3600)
+    await bot_loop()
+
+if __name__ == "__main__":
+    asyncio.run(main())
