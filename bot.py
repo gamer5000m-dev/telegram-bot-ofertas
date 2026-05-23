@@ -1,10 +1,10 @@
-
-
 import os
 import asyncio
 import sqlite3
 import requests
-import re
+import hashlib
+from io import BytesIO
+
 from flask import Flask
 from bs4 import BeautifulSoup
 
@@ -33,8 +33,6 @@ TEMPO = 300
 LIMITE = 3
 AFILIADO = "?utm_source=telegram"
 
-# ================= TELEGRAM =================
-
 app_bot = Application.builder().token(TOKEN).build()
 
 # ================= BANCO =================
@@ -57,29 +55,44 @@ def salvar(link):
     cursor.execute("INSERT OR IGNORE INTO ofertas(link) VALUES(?)", (link,))
     conn.commit()
 
-# ================= IMAGEM SEGURA (FIX REAL) =================
+# ================= CACHE DE IMAGEM =================
 
-def obter_imagem_segura(url):
+CACHE_DIR = "cache_imgs"
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+def hash_url(url):
+    return hashlib.md5(url.encode()).hexdigest()
+
+def baixar_imagem(url):
     try:
         if not url:
             return None
 
-        headers = {
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "image/avif,image/webp,image/*,*/*"
-        }
+        file_id = hash_url(url)
+        path = os.path.join(CACHE_DIR, f"{file_id}.jpg")
 
-        r = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
+        # já existe no cache
+        if os.path.exists(path):
+            with open(path, "rb") as f:
+                return f.read()
+
+        headers = {"User-Agent": "Mozilla/5.0"}
+
+        r = requests.get(url, headers=headers, timeout=10, stream=True, allow_redirects=True)
 
         content_type = r.headers.get("Content-Type", "")
 
         if not content_type.startswith("image/"):
             return None
 
-        if len(r.content) < 1000:
+        if len(r.content) < 1500:
             return None
 
-        return url
+        # salva cache
+        with open(path, "wb") as f:
+            f.write(r.content)
+
+        return r.content
 
     except:
         return None
@@ -112,6 +125,8 @@ def pegar_ofertas():
                 continue
 
             preco = "Preço não encontrado"
+
+            import re
             p = re.findall(r"R\$\s?\d+[.,]?\d*", titulo)
             if p:
                 preco = p[0]
@@ -147,6 +162,7 @@ async def bot_loop():
             enviados = 0
 
             for o in ofertas:
+
                 if enviados >= LIMITE:
                     break
 
@@ -164,14 +180,16 @@ async def bot_loop():
                     InlineKeyboardButton("🛒 Comprar", url=o["link"])
                 ]])
 
-                img = obter_imagem_segura(o["imagem"])
+                img_bytes = baixar_imagem(o["imagem"])
 
-                if not img:
-                    img = "https://static.promobit.com.br/assets/img/promobit-logo.png"
+                if not img_bytes:
+                    img_bytes = requests.get(
+                        "https://static.promobit.com.br/assets/img/promobit-logo.png"
+                    ).content
 
                 await app_bot.bot.send_photo(
                     chat_id=CHAT_ID,
-                    photo=img,
+                    photo=BytesIO(img_bytes),
                     caption=msg,
                     reply_markup=teclado
                 )
