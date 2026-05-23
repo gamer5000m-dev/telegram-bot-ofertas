@@ -1,5 +1,6 @@
 import threading
 import time
+import os
 from flask import Flask
 
 # ================= FLASK =================
@@ -10,9 +11,6 @@ app = Flask(__name__)
 def home():
     return "Bot rodando OK"
 
-def run_web():
-    app.run(host="0.0.0.0", port=10000)
-
 # ================= BOT =================
 
 def bot():
@@ -22,13 +20,19 @@ def bot():
         print("BOT RODANDO...")
         time.sleep(60)
 
-# ================= START =================
+# ================= START BOT =================
+
+def start_bot():
+    threading.Thread(target=bot, daemon=True).start()
+
+# ================= MAIN =================
 
 if __name__ == "__main__":
     print("INICIANDO SISTEMA...")
 
-    threading.Thread(target=run_web, daemon=True).start()
-    threading.Thread(target=bot, daemon=True).start()
+    # inicia bot em background
+    start_bot()
 
-    while True:
-        time.sleep(999999)
+    # 🔥 FLASK TEM QUE SER O PRINCIPAL (NÃO THREAD)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
