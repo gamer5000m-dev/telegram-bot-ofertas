@@ -15,8 +15,8 @@ from telegram.request import HTTPXRequest
 # CONFIG
 # =========================================================
 
-TOKEN = "8391542912:AAH1cduJ0E7naPhA0z6uezCgkbLn1BjyQDE"
-CHAT_ID = -1003914285353
+TOKEN = "SEU_TOKEN_AQUI"
+CHAT_ID = -1001234567890
 
 URL = "https://www.promobit.com.br"
 TEMPO = 300
@@ -24,7 +24,7 @@ LIMITE = 3
 AFILIADO = "?utm_source=telegram"
 
 # =========================================================
-# FLASK (KEEP RENDER ALIVE)
+# FLASK (KEEP ALIVE RENDER)
 # =========================================================
 
 app = Flask(__name__)
@@ -172,18 +172,15 @@ async def enviar_ofertas():
             await asyncio.sleep(30)
 
 # =========================================================
-# START (RENDER SAFE FINAL FIX)
+# START (RENDER SAFE FINAL)
 # =========================================================
-
-def start_bot():
-    asyncio.run(enviar_ofertas())
 
 if __name__ == "__main__":
     print("INICIANDO SISTEMA...")
+    print("INICIANDO BOT...")
 
+    # Flask em background
     threading.Thread(target=run_web, daemon=True).start()
-    threading.Thread(target=start_bot, daemon=True).start()
 
-    # 🔥 mantém processo vivo no Render
-    while True:
-        pass
+    # Bot rodando no main thread (CORRETO)
+    asyncio.run(enviar_ofertas())
