@@ -32,7 +32,6 @@ CHAT_ID = -1003914285353
 URL = "https://www.promobit.com.br"
 TEMPO = 300
 LIMITE = 3
-
 AFILIADO = "?utm_source=telegram"
 
 app_bot = Application.builder().token(TOKEN).build()
@@ -57,13 +56,31 @@ def salvar(link):
     cursor.execute("INSERT OR IGNORE INTO ofertas(link) VALUES(?)", (link,))
     conn.commit()
 
-# ================= VALIDAÇÕES =================
+# ================= VALIDAÇÃO DE IMAGEM (CRÍTICA) =================
 
 def imagem_valida(url):
-    if not url:
+    try:
+        if not url:
+            return False
+
+        headers = {"User-Agent": "Mozilla/5.0"}
+
+        r = requests.get(url, headers=headers, timeout=10, stream=True)
+
+        content_type = r.headers.get("Content-Type", "")
+
+        if "image" not in content_type:
+            return False
+
+        if r.status_code != 200:
+            return False
+
+        return True
+
+    except:
         return False
-    url = url.split("?")[0].lower()
-    return url.endswith((".jpg", ".jpeg", ".png"))
+
+# ================= VALIDAÇÃO DE LINK =================
 
 def link_valido(link):
     if not link:
@@ -72,7 +89,7 @@ def link_valido(link):
         return True
     return False
 
-# ================= SCRAP =================
+# ================= SCRAPING =================
 
 def pegar_ofertas():
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -109,9 +126,6 @@ def pegar_ofertas():
 
             if img:
                 imagem = img.get("data-src") or img.get("src")
-
-            if not imagem or not imagem_valida(imagem):
-                imagem = "https://static.promobit.com.br/assets/img/promobit-logo.png"
 
             ofertas.append({
                 "titulo": titulo,
@@ -157,9 +171,15 @@ async def bot_loop():
                     InlineKeyboardButton("🛒 Comprar", url=o["link"])
                 ]])
 
+                img = o["imagem"]
+
+                # 🔥 REGRA FINAL ANTI-ERRO TELEGRAM
+                if not imagem_valida(img):
+                    img = "https://static.promobit.com.br/assets/img/promobit-logo.png"
+
                 await app_bot.bot.send_photo(
                     chat_id=CHAT_ID,
-                    photo=o["imagem"],
+                    photo=img,
                     caption=msg,
                     reply_markup=keyboard
                 )
@@ -181,10 +201,7 @@ async def bot_loop():
 # ================= START =================
 
 async def main():
-    import threading
-
     threading.Thread(target=run_web, daemon=True).start()
-
     await bot_loop()
 
 if __name__ == "__main__":
