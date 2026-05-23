@@ -1,11 +1,10 @@
-import threading
-import time
+
+
 import os
 import asyncio
+import sqlite3
 import requests
 import re
-import sqlite3
-
 from flask import Flask
 from bs4 import BeautifulSoup
 
@@ -34,6 +33,8 @@ TEMPO = 300
 LIMITE = 3
 AFILIADO = "?utm_source=telegram"
 
+# ================= TELEGRAM =================
+
 app_bot = Application.builder().token(TOKEN).build()
 
 # ================= BANCO =================
@@ -56,38 +57,32 @@ def salvar(link):
     cursor.execute("INSERT OR IGNORE INTO ofertas(link) VALUES(?)", (link,))
     conn.commit()
 
-# ================= VALIDAÇÃO DE IMAGEM (CRÍTICA) =================
+# ================= IMAGEM SEGURA (FIX REAL) =================
 
-def imagem_valida(url):
+def obter_imagem_segura(url):
     try:
         if not url:
-            return False
+            return None
 
-        headers = {"User-Agent": "Mozilla/5.0"}
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "image/avif,image/webp,image/*,*/*"
+        }
 
-        r = requests.get(url, headers=headers, timeout=10, stream=True)
+        r = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
 
         content_type = r.headers.get("Content-Type", "")
 
-        if "image" not in content_type:
-            return False
+        if not content_type.startswith("image/"):
+            return None
 
-        if r.status_code != 200:
-            return False
+        if len(r.content) < 1000:
+            return None
 
-        return True
+        return url
 
     except:
-        return False
-
-# ================= VALIDAÇÃO DE LINK =================
-
-def link_valido(link):
-    if not link:
-        return False
-    if link.startswith("http") and "promobit" in link:
-        return True
-    return False
+        return None
 
 # ================= SCRAPING =================
 
@@ -113,7 +108,7 @@ def pegar_ofertas():
             if link.startswith("/"):
                 link = URL + link
 
-            if not link_valido(link):
+            if "promobit" not in link:
                 continue
 
             preco = "Preço não encontrado"
@@ -142,18 +137,16 @@ def pegar_ofertas():
 # ================= BOT LOOP =================
 
 async def bot_loop():
-
-    print("BOT INICIADO", flush=True)
+    print("BOT INICIADO")
 
     while True:
         try:
             ofertas = pegar_ofertas()
-            print("OFERTAS:", len(ofertas), flush=True)
+            print("OFERTAS:", len(ofertas))
 
             enviados = 0
 
             for o in ofertas:
-
                 if enviados >= LIMITE:
                     break
 
@@ -167,43 +160,43 @@ async def bot_loop():
 💰 {o['preco']}
 """
 
-                keyboard = InlineKeyboardMarkup([[
+                teclado = InlineKeyboardMarkup([[
                     InlineKeyboardButton("🛒 Comprar", url=o["link"])
                 ]])
 
-                img = o["imagem"]
+                img = obter_imagem_segura(o["imagem"])
 
-                # 🔥 REGRA FINAL ANTI-ERRO TELEGRAM
-                if not imagem_valida(img):
+                if not img:
                     img = "https://static.promobit.com.br/assets/img/promobit-logo.png"
 
                 await app_bot.bot.send_photo(
                     chat_id=CHAT_ID,
                     photo=img,
                     caption=msg,
-                    reply_markup=keyboard
+                    reply_markup=teclado
                 )
 
                 salvar(o["link"])
                 enviados += 1
 
-                print("ENVIADO:", o["titulo"], flush=True)
+                print("ENVIADO:", o["titulo"])
 
                 await asyncio.sleep(10)
 
-            print("AGUARDANDO...", flush=True)
+            print("AGUARDANDO...")
             await asyncio.sleep(TEMPO)
 
         except Exception as e:
-            print("ERRO BOT:", repr(e), flush=True)
+            print("ERRO BOT:", repr(e))
             await asyncio.sleep(30)
 
 # ================= START =================
 
 async def main():
+    import threading
     threading.Thread(target=run_web, daemon=True).start()
     await bot_loop()
 
 if __name__ == "__main__":
-    print("INICIANDO SISTEMA...", flush=True)
+    print("INICIANDO SISTEMA...")
     asyncio.run(main())
