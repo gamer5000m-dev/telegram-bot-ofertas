@@ -1,5 +1,5 @@
-python-telegram-bot
-beautifulsoup4
+python-telegram-bot==22.7
 requests
-lxml
+beautifulsoup4
+flask
 httpx
