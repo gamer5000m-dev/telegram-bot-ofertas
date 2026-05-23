@@ -15,8 +15,8 @@ from telegram.request import HTTPXRequest
 # CONFIG
 # =========================================================
 
-TOKEN = "SEU_TOKEN_AQUI"
-CHAT_ID = -1001234567890
+TOKEN = "8391542912:AAH1cduJ0E7naPhA0z6uezCgkbLn1BjyQDE"
+CHAT_ID = -1003914285353
 
 URL = "https://www.promobit.com.br"
 TEMPO = 300
