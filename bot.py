@@ -1,8 +1,11 @@
+
 import os
 import asyncio
+import time
+import random
 import sqlite3
 import requests
-import hashlib
+import re
 from io import BytesIO
 
 from flask import Flask
@@ -55,47 +58,26 @@ def salvar(link):
     cursor.execute("INSERT OR IGNORE INTO ofertas(link) VALUES(?)", (link,))
     conn.commit()
 
-# ================= CACHE DE IMAGEM =================
+# ================= ANTI-BAN RATE LIMIT =================
 
-CACHE_DIR = "cache_imgs"
-os.makedirs(CACHE_DIR, exist_ok=True)
+class RateLimiter:
+    def __init__(self):
+        self.last_send = 0
+        self.min_delay = 12  # base segura Telegram
 
-def hash_url(url):
-    return hashlib.md5(url.encode()).hexdigest()
+    async def wait(self):
+        now = time.time()
+        diff = now - self.last_send
 
-def baixar_imagem(url):
-    try:
-        if not url:
-            return None
+        jitter = random.uniform(3, 10)
+        wait_time = self.min_delay + jitter - diff
 
-        file_id = hash_url(url)
-        path = os.path.join(CACHE_DIR, f"{file_id}.jpg")
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
 
-        # já existe no cache
-        if os.path.exists(path):
-            with open(path, "rb") as f:
-                return f.read()
+        self.last_send = time.time()
 
-        headers = {"User-Agent": "Mozilla/5.0"}
-
-        r = requests.get(url, headers=headers, timeout=10, stream=True, allow_redirects=True)
-
-        content_type = r.headers.get("Content-Type", "")
-
-        if not content_type.startswith("image/"):
-            return None
-
-        if len(r.content) < 1500:
-            return None
-
-        # salva cache
-        with open(path, "wb") as f:
-            f.write(r.content)
-
-        return r.content
-
-    except:
-        return None
+rate_limiter = RateLimiter()
 
 # ================= SCRAPING =================
 
@@ -126,7 +108,6 @@ def pegar_ofertas():
 
             preco = "Preço não encontrado"
 
-            import re
             p = re.findall(r"R\$\s?\d+[.,]?\d*", titulo)
             if p:
                 preco = p[0]
@@ -148,6 +129,28 @@ def pegar_ofertas():
             continue
 
     return ofertas
+
+# ================= IMAGEM SEGURA =================
+
+def baixar_imagem(url):
+    try:
+        if not url:
+            return None
+
+        headers = {"User-Agent": "Mozilla/5.0"}
+
+        r = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
+
+        if not r.headers.get("Content-Type", "").startswith("image/"):
+            return None
+
+        if len(r.content) < 1500:
+            return None
+
+        return r.content
+
+    except:
+        return None
 
 # ================= BOT LOOP =================
 
@@ -180,6 +183,9 @@ async def bot_loop():
                     InlineKeyboardButton("🛒 Comprar", url=o["link"])
                 ]])
 
+                # 🔥 ANTI-BAN APLICADO AQUI
+                await rate_limiter.wait()
+
                 img_bytes = baixar_imagem(o["imagem"])
 
                 if not img_bytes:
@@ -199,14 +205,12 @@ async def bot_loop():
 
                 print("ENVIADO:", o["titulo"])
 
-                await asyncio.sleep(10)
-
-            print("AGUARDANDO...")
-            await asyncio.sleep(TEMPO)
+            # pausa inteligente entre ciclos (não fixa)
+            await asyncio.sleep(TEMPO + random.uniform(5, 30))
 
         except Exception as e:
             print("ERRO BOT:", repr(e))
-            await asyncio.sleep(30)
+            await asyncio.sleep(20)
 
 # ================= START =================
 
