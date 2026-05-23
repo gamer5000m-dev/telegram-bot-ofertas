@@ -1,8 +1,8 @@
+import asyncio
 import sqlite3
 import requests
 import re
 import threading
-import time
 import os
 
 from bs4 import BeautifulSoup
@@ -24,7 +24,7 @@ LIMITE = 3
 AFILIADO = "?utm_source=telegram"
 
 # =========================================================
-# FLASK (KEEP ALIVE RENDER)
+# FLASK
 # =========================================================
 
 app = Flask(__name__)
@@ -35,15 +35,10 @@ def home():
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
-    app.run(
-        host="0.0.0.0",
-        port=port,
-        debug=False,
-        use_reloader=False
-    )
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
 
 # =========================================================
-# BANCO DE DADOS
+# BANCO
 # =========================================================
 
 conn = sqlite3.connect("ofertas.db", check_same_thread=False)
@@ -72,8 +67,8 @@ def salvar_oferta(link):
 def pegar_ofertas():
     headers = {"User-Agent": "Mozilla/5.0"}
 
-    resposta = requests.get(URL, headers=headers, timeout=30)
-    soup = BeautifulSoup(resposta.text, "html.parser")
+    r = requests.get(URL, headers=headers, timeout=30)
+    soup = BeautifulSoup(r.text, "html.parser")
 
     ofertas = []
 
@@ -103,17 +98,16 @@ def pegar_ofertas():
                 "imagem": "https://static.promobit.com.br/assets/img/promobit-logo.png"
             })
 
-        except Exception as e:
-            print("SCRAP ERROR:", repr(e))
+        except:
             continue
 
     return ofertas
 
 # =========================================================
-# BOT (SEM ASYNC - ESTÁVEL NO RENDER)
+# BOT ASYNC (CORRETO)
 # =========================================================
 
-def enviar_ofertas():
+async def enviar_ofertas():
 
     bot = Bot(
         token=TOKEN,
@@ -150,7 +144,7 @@ def enviar_ofertas():
                     InlineKeyboardButton("🛒 Comprar", url=link)
                 ]])
 
-                bot.send_photo(
+                await bot.send_photo(
                     chat_id=CHAT_ID,
                     photo=oferta["imagem"],
                     caption=mensagem,
@@ -162,23 +156,24 @@ def enviar_ofertas():
 
                 print("ENVIADO:", oferta["titulo"])
 
-                time.sleep(10)
+                await asyncio.sleep(10)
 
             print("AGUARDANDO...")
-            time.sleep(TEMPO)
+            await asyncio.sleep(TEMPO)
 
         except Exception as e:
-            print("ERRO COMPLETO:", repr(e))
-            time.sleep(30)
+            print("ERRO:", repr(e))
+            await asyncio.sleep(30)
 
 # =========================================================
-# START (RENDER SAFE)
+# START
 # =========================================================
 
 if __name__ == "__main__":
     print("INICIANDO SISTEMA...")
-    print("INICIANDO BOT...")
 
     threading.Thread(target=run_web, daemon=True).start()
 
-    enviar_ofertas()
+    print("INICIANDO BOT...")
+
+    asyncio.run(enviar_ofertas())
