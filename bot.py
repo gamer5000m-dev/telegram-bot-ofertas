@@ -1,8 +1,8 @@
-import asyncio
 import sqlite3
 import requests
 import re
 import threading
+import time
 import os
 
 from bs4 import BeautifulSoup
@@ -24,7 +24,7 @@ LIMITE = 3
 AFILIADO = "?utm_source=telegram"
 
 # =========================================================
-# FLASK
+# FLASK (KEEP ALIVE)
 # =========================================================
 
 app = Flask(__name__)
@@ -104,10 +104,10 @@ def pegar_ofertas():
     return ofertas
 
 # =========================================================
-# BOT ASYNC (CORRETO)
+# BOT (SEM ASYNC — 100% ESTÁVEL)
 # =========================================================
 
-async def enviar_ofertas():
+def bot_loop():
 
     bot = Bot(
         token=TOKEN,
@@ -144,7 +144,7 @@ async def enviar_ofertas():
                     InlineKeyboardButton("🛒 Comprar", url=link)
                 ]])
 
-                await bot.send_photo(
+                bot.send_photo(
                     chat_id=CHAT_ID,
                     photo=oferta["imagem"],
                     caption=mensagem,
@@ -156,24 +156,21 @@ async def enviar_ofertas():
 
                 print("ENVIADO:", oferta["titulo"])
 
-                await asyncio.sleep(10)
+                time.sleep(10)
 
             print("AGUARDANDO...")
-            await asyncio.sleep(TEMPO)
+            time.sleep(TEMPO)
 
         except Exception as e:
             print("ERRO:", repr(e))
-            await asyncio.sleep(30)
+            time.sleep(30)
 
 # =========================================================
-# START
+# START (RENDER SAFE)
 # =========================================================
 
 if __name__ == "__main__":
     print("INICIANDO SISTEMA...")
 
     threading.Thread(target=run_web, daemon=True).start()
-
-    print("INICIANDO BOT...")
-
-    asyncio.run(enviar_ofertas())
+    threading.Thread(target=bot_loop, daemon=True).start()
