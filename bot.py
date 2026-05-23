@@ -1,16 +1,17 @@
 import threading
 import time
 import os
+import asyncio
 import requests
 import re
 import sqlite3
-import random
 
 from flask import Flask
 from bs4 import BeautifulSoup
 
-from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.request import HTTPXRequest
+from telegram import Bot
 
 # ================= FLASK =================
 
@@ -32,10 +33,7 @@ CHAT_ID = -1003914285353
 URL = "https://www.promobit.com.br"
 TEMPO = 300
 LIMITE = 3
-
-AFILIADO = "?utm_source=telegram&utm_medium=bot&utm_campaign=ofertas"
-
-bot = Bot(token=TOKEN, request=HTTPXRequest())
+AFILIADO = "?utm_source=telegram&utm_medium=bot"
 
 # ================= BANCO =================
 
@@ -56,19 +54,6 @@ def ja_enviado(link):
 def salvar(link):
     cursor.execute("INSERT OR IGNORE INTO ofertas(link) VALUES(?)", (link,))
     conn.commit()
-
-# ================= UTIL =================
-
-def delay_humano():
-    time.sleep(random.randint(8, 18))
-
-def pegar_imagem(item):
-    img = item.find("img")
-
-    if img:
-        return img.get("data-src") or img.get("src")
-
-    return "https://static.promobit.com.br/assets/img/promobit-logo.png"
 
 # ================= SCRAP =================
 
@@ -99,7 +84,15 @@ def pegar_ofertas():
             if p:
                 preco = p[0]
 
-            imagem = pegar_imagem(item)
+            img = item.find("img")
+            imagem = (
+                img.get("data-src")
+                if img and img.get("data-src")
+                else img.get("src") if img else None
+            )
+
+            if not imagem:
+                imagem = "https://static.promobit.com.br/assets/img/promobit-logo.png"
 
             ofertas.append({
                 "titulo": titulo,
@@ -113,9 +106,15 @@ def pegar_ofertas():
 
     return ofertas
 
-# ================= BOT =================
+# ================= BOT (ASYNC CORRETO) =================
 
-def rodar_bot():
+async def rodar_bot_async():
+
+    bot = Bot(
+        token=TOKEN,
+        request=HTTPXRequest()
+    )
+
     print("BOT PROFISSIONAL INICIADO")
 
     while True:
@@ -146,7 +145,7 @@ def rodar_bot():
                     InlineKeyboardButton("🛒 Comprar agora", url=o["link"])
                 ]])
 
-                bot.send_photo(
+                await bot.send_photo(
                     chat_id=CHAT_ID,
                     photo=o["imagem"],
                     caption=mensagem,
@@ -157,15 +156,17 @@ def rodar_bot():
                 enviados += 1
 
                 print("ENVIADO:", o["titulo"])
-
-                delay_humano()
+                await asyncio.sleep(10)
 
             print("AGUARDANDO...")
-            time.sleep(TEMPO)
+            await asyncio.sleep(TEMPO)
 
         except Exception as e:
             print("ERRO:", repr(e))
-            time.sleep(30)
+            await asyncio.sleep(30)
+
+def rodar_bot():
+    asyncio.run(rodar_bot_async())
 
 # ================= START =================
 
