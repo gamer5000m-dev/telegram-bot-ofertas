@@ -27,8 +27,8 @@ def run_web():
 
 # ================= CONFIG =================
 
-TOKEN = "8391542912:AAH1cduJ0E7naPhA0z6uezCgkbLn1BjyQDE"
-CHAT_ID = -1003914285353
+TOKEN = ""
+CHAT_ID = 
 
 URL = "https://www.promobit.com.br"
 TEMPO = 300
