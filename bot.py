@@ -11,7 +11,7 @@ from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.request import HTTPXRequest
 
 # =========================================================
-# CONFIGURAÇÕES
+# CONFIG
 # =========================================================
 
 TOKEN = "8391542912:AAH1cduJ0E7naPhA0z6uezCgkbLn1BjyQDE"
@@ -23,7 +23,7 @@ LIMITE = 3
 AFILIADO = "?utm_source=telegram"
 
 # =========================================================
-# FLASK (RENDER PRECISA DISSO)
+# FLASK (RENDER KEEP ALIVE)
 # =========================================================
 
 app = Flask(__name__)
@@ -33,10 +33,15 @@ def home():
     return "Bot rodando"
 
 def run_web():
-    app.run(host="0.0.0.0", port=10000)
+    app.run(
+        host="0.0.0.0",
+        port=10000,
+        debug=False,
+        use_reloader=False
+    )
 
 # =========================================================
-# BANCO DE DADOS
+# BANCO
 # =========================================================
 
 conn = sqlite3.connect("ofertas.db", check_same_thread=False)
@@ -50,16 +55,12 @@ CREATE TABLE IF NOT EXISTS ofertas (
 
 conn.commit()
 
-# =========================================================
-# VERIFICAR REPETIÇÃO
-# =========================================================
-
 def oferta_ja_postada(link):
-    cursor.execute("SELECT link FROM ofertas WHERE link=?", (link,))
+    cursor.execute("SELECT 1 FROM ofertas WHERE link=?", (link,))
     return cursor.fetchone()
 
 def salvar_oferta(link):
-    cursor.execute("INSERT INTO ofertas(link) VALUES(?)", (link,))
+    cursor.execute("INSERT OR IGNORE INTO ofertas(link) VALUES(?)", (link,))
     conn.commit()
 
 # =========================================================
@@ -70,13 +71,11 @@ def pegar_ofertas():
     headers = {"User-Agent": "Mozilla/5.0"}
 
     resposta = requests.get(URL, headers=headers, timeout=30)
-
     soup = BeautifulSoup(resposta.text, "html.parser")
 
     ofertas = []
-    links = soup.find_all("a")
 
-    for item in links:
+    for item in soup.find_all("a"):
         try:
             titulo = item.get_text(strip=True)
             link = item.get("href")
@@ -91,48 +90,38 @@ def pegar_ofertas():
                 link = URL + link
 
             preco = "Confira no site"
-
             precos = re.findall(r"R\$\s?\d+[.,]?\d*", titulo)
             if precos:
                 preco = precos[0]
 
-            imagem = "https://static.promobit.com.br/assets/img/promobit-logo.png"
-            link_afiliado = link + AFILIADO
-
             ofertas.append({
                 "titulo": titulo,
-                "link": link_afiliado,
+                "link": link + AFILIADO,
                 "preco": preco,
-                "imagem": imagem
+                "imagem": "https://static.promobit.com.br/assets/img/promobit-logo.png"
             })
 
         except:
-            pass
+            continue
 
     return ofertas
 
 # =========================================================
-# BOT TELEGRAM
+# BOT
 # =========================================================
 
 async def enviar_ofertas():
 
-    request = HTTPXRequest(
-        connection_pool_size=20,
-        read_timeout=30,
-        write_timeout=30,
-        connect_timeout=30
+    bot = Bot(
+        token=TOKEN,
+        request=HTTPXRequest()
     )
-
-    bot = Bot(token=TOKEN, request=request)
 
     print("BOT INICIADO")
 
     while True:
         try:
             ofertas = pegar_ofertas()
-            print("OFERTAS:", len(ofertas))
-
             enviados = 0
 
             for oferta in ofertas:
@@ -140,19 +129,16 @@ async def enviar_ofertas():
                 if enviados >= LIMITE:
                     break
 
-                titulo = oferta["titulo"]
                 link = oferta["link"]
-                preco = oferta["preco"]
-                imagem = oferta["imagem"]
 
                 if oferta_ja_postada(link):
                     continue
 
                 mensagem = f"""🔥 OFERTA NOVA
 
-📦 {titulo}
+📦 {oferta['titulo']}
 
-💰 {preco}
+💰 {oferta['preco']}
 """
 
                 teclado = InlineKeyboardMarkup([[
@@ -161,29 +147,29 @@ async def enviar_ofertas():
 
                 await bot.send_photo(
                     chat_id=CHAT_ID,
-                    photo=imagem,
+                    photo=oferta["imagem"],
                     caption=mensagem,
                     reply_markup=teclado
                 )
 
-                print("ENVIADO:", titulo)
-
                 salvar_oferta(link)
                 enviados += 1
 
-                await asyncio.sleep(15)
+                print("ENVIADO:", oferta["titulo"])
+
+                await asyncio.sleep(10)
 
             print("AGUARDANDO...")
             await asyncio.sleep(TEMPO)
 
-        except Exception as erro:
-            print("ERRO:", erro)
+        except Exception as e:
+            print("ERRO:", e)
             await asyncio.sleep(30)
 
 # =========================================================
-# START (FLASK + BOT JUNTOS)
+# START
 # =========================================================
 
 if __name__ == "__main__":
-    threading.Thread(target=run_web).start()
+    threading.Thread(target=run_web, daemon=True).start()
     asyncio.run(enviar_ofertas())
