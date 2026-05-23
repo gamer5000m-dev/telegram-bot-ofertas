@@ -1,3 +1,4 @@
+
 import asyncio
 import sqlite3
 import requests
@@ -43,7 +44,7 @@ def run_web():
     )
 
 # =========================================================
-# BANCO
+# BANCO DE DADOS
 # =========================================================
 
 conn = sqlite3.connect("ofertas.db", check_same_thread=False)
@@ -98,29 +99,4 @@ def pegar_ofertas():
 
             ofertas.append({
                 "titulo": titulo,
-                "link": link + AFILIADO,
-                "preco": preco,
-                "imagem": "https://static.promobit.com.br/assets/img/promobit-logo.png"
-            })
-
-        except Exception as e:
-            print("SCRAP ERROR:", repr(e))
-            continue
-
-    return ofertas
-
-# =========================================================
-# BOT
-# =========================================================
-
-async def enviar_ofertas():
-
-    bot = Bot(
-        token=TOKEN,
-        request=HTTPXRequest()
-    )
-
-    print("BOT INICIADO")
-
-    while True:
-        try:
+                "link": link + AFILI
