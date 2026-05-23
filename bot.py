@@ -1,4 +1,3 @@
-
 import asyncio
 import sqlite3
 import requests
@@ -25,7 +24,7 @@ LIMITE = 3
 AFILIADO = "?utm_source=telegram"
 
 # =========================================================
-# FLASK (RENDER PRECISA DISSO)
+# FLASK (RENDER KEEP ALIVE)
 # =========================================================
 
 app = Flask(__name__)
@@ -67,7 +66,7 @@ def salvar_oferta(link):
     conn.commit()
 
 # =========================================================
-# SCRAPING
+# SCRAPING (CORRIGIDO)
 # =========================================================
 
 def pegar_ofertas():
@@ -97,6 +96,92 @@ def pegar_ofertas():
             if precos:
                 preco = precos[0]
 
-            ofertas.append({
+            oferta = {
                 "titulo": titulo,
-                "link": link + AFILI
+                "link": link + AFILIADO,
+                "preco": preco,
+                "imagem": "https://static.promobit.com.br/assets/img/promobit-logo.png"
+            }
+
+            ofertas.append(oferta)
+
+        except Exception as e:
+            print("SCRAP ERROR:", repr(e))
+            continue
+
+    return ofertas
+
+# =========================================================
+# BOT
+# =========================================================
+
+async def enviar_ofertas():
+
+    bot = Bot(
+        token=TOKEN,
+        request=HTTPXRequest()
+    )
+
+    print("BOT INICIADO")
+
+    while True:
+        try:
+            ofertas = pegar_ofertas()
+            print("OFERTAS:", len(ofertas))
+
+            enviados = 0
+
+            for oferta in ofertas:
+
+                if enviados >= LIMITE:
+                    break
+
+                link = oferta["link"]
+
+                if oferta_ja_postada(link):
+                    continue
+
+                mensagem = f"""🔥 OFERTA NOVA
+
+📦 {oferta['titulo']}
+
+💰 {oferta['preco']}
+"""
+
+                teclado = InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🛒 Comprar", url=link)
+                ]])
+
+                await bot.send_photo(
+                    chat_id=CHAT_ID,
+                    photo=oferta["imagem"],
+                    caption=mensagem,
+                    reply_markup=teclado
+                )
+
+                salvar_oferta(link)
+                enviados += 1
+
+                print("ENVIADO:", oferta["titulo"])
+
+                await asyncio.sleep(10)
+
+            print("AGUARDANDO...")
+            await asyncio.sleep(TEMPO)
+
+        except Exception as e:
+            print("ERRO COMPLETO:", repr(e))
+            await asyncio.sleep(30)
+
+# =========================================================
+# START (RENDER SAFE)
+# =========================================================
+
+def start_bot():
+    asyncio.run(enviar_ofertas())
+
+if __name__ == "__main__":
+    print("INICIANDO SISTEMA...")
+
+    threading.Thread(target=run_web, daemon=True).start()
+    threading.Thread(target=start_bot, daemon=True).start()
