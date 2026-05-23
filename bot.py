@@ -24,7 +24,7 @@ LIMITE = 3
 AFILIADO = "?utm_source=telegram"
 
 # =========================================================
-# FLASK (RENDER KEEP ALIVE)
+# FLASK (KEEP RENDER ALIVE)
 # =========================================================
 
 app = Flask(__name__)
@@ -43,7 +43,7 @@ def run_web():
     )
 
 # =========================================================
-# BANCO DE DADOS
+# BANCO
 # =========================================================
 
 conn = sqlite3.connect("ofertas.db", check_same_thread=False)
@@ -66,7 +66,7 @@ def salvar_oferta(link):
     conn.commit()
 
 # =========================================================
-# SCRAPING (CORRIGIDO)
+# SCRAPING
 # =========================================================
 
 def pegar_ofertas():
@@ -96,14 +96,12 @@ def pegar_ofertas():
             if precos:
                 preco = precos[0]
 
-            oferta = {
+            ofertas.append({
                 "titulo": titulo,
                 "link": link + AFILIADO,
                 "preco": preco,
                 "imagem": "https://static.promobit.com.br/assets/img/promobit-logo.png"
-            }
-
-            ofertas.append(oferta)
+            })
 
         except Exception as e:
             print("SCRAP ERROR:", repr(e))
@@ -174,7 +172,7 @@ async def enviar_ofertas():
             await asyncio.sleep(30)
 
 # =========================================================
-# START (RENDER SAFE)
+# START (RENDER SAFE FINAL FIX)
 # =========================================================
 
 def start_bot():
@@ -185,3 +183,7 @@ if __name__ == "__main__":
 
     threading.Thread(target=run_web, daemon=True).start()
     threading.Thread(target=start_bot, daemon=True).start()
+
+    # 🔥 mantém processo vivo no Render
+    while True:
+        pass
