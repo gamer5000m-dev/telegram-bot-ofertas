@@ -43,7 +43,7 @@ def run_web():
     )
 
 # =========================================================
-# BANCO DE DADOS
+# BANCO
 # =========================================================
 
 conn = sqlite3.connect("ofertas.db", check_same_thread=False)
@@ -124,57 +124,3 @@ async def enviar_ofertas():
 
     while True:
         try:
-            ofertas = pegar_ofertas()
-            print("OFERTAS:", len(ofertas))
-
-            enviados = 0
-
-            for oferta in ofertas:
-
-                if enviados >= LIMITE:
-                    break
-
-                link = oferta["link"]
-
-                if oferta_ja_postada(link):
-                    continue
-
-                mensagem = f"""🔥 OFERTA NOVA
-
-📦 {oferta['titulo']}
-
-💰 {oferta['preco']}
-"""
-
-                teclado = InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🛒 Comprar", url=link)
-                ]])
-
-                await bot.send_photo(
-                    chat_id=CHAT_ID,
-                    photo=oferta["imagem"],
-                    caption=mensagem,
-                    reply_markup=teclado
-                )
-
-                salvar_oferta(link)
-                enviados += 1
-
-                print("ENVIADO:", oferta["titulo"])
-
-                await asyncio.sleep(10)
-
-            print("AGUARDANDO...")
-            await asyncio.sleep(TEMPO)
-
-        except Exception as e:
-            print("ERRO COMPLETO:", repr(e))
-            await asyncio.sleep(30)
-
-# =========================================================
-# START
-# =========================================================
-
-if __name__ == "__main__":
-    threading.Thread(target=run_web, daemon=True).start()
-    asyncio.run(enviar_ofertas())
