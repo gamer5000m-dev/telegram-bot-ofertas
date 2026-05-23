@@ -3,6 +3,7 @@ import sqlite3
 import requests
 import re
 import threading
+import os
 
 from bs4 import BeautifulSoup
 from flask import Flask
@@ -23,7 +24,7 @@ LIMITE = 3
 AFILIADO = "?utm_source=telegram"
 
 # =========================================================
-# FLASK (RENDER KEEP ALIVE)
+# FLASK (RENDER PRECISA DISSO)
 # =========================================================
 
 app = Flask(__name__)
@@ -33,15 +34,16 @@ def home():
     return "Bot rodando"
 
 def run_web():
+    port = int(os.environ.get("PORT", 10000))
     app.run(
         host="0.0.0.0",
-        port=10000,
+        port=port,
         debug=False,
         use_reloader=False
     )
 
 # =========================================================
-# BANCO
+# BANCO DE DADOS
 # =========================================================
 
 conn = sqlite3.connect("ofertas.db", check_same_thread=False)
@@ -101,7 +103,8 @@ def pegar_ofertas():
                 "imagem": "https://static.promobit.com.br/assets/img/promobit-logo.png"
             })
 
-        except:
+        except Exception as e:
+            print("SCRAP ERROR:", repr(e))
             continue
 
     return ofertas
@@ -122,6 +125,8 @@ async def enviar_ofertas():
     while True:
         try:
             ofertas = pegar_ofertas()
+            print("OFERTAS:", len(ofertas))
+
             enviados = 0
 
             for oferta in ofertas:
@@ -163,7 +168,7 @@ async def enviar_ofertas():
             await asyncio.sleep(TEMPO)
 
         except Exception as e:
-            print("ERRO:", e)
+            print("ERRO COMPLETO:", repr(e))
             await asyncio.sleep(30)
 
 # =========================================================
