@@ -1,18 +1,17 @@
-
+import threading
+import time
 import os
 import asyncio
-import time
-import random
-import sqlite3
 import requests
 import re
-from io import BytesIO
+import sqlite3
+import random
 
 from flask import Flask
 from bs4 import BeautifulSoup
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application
+from telegram import Bot
 
 # ================= FLASK =================
 
@@ -36,7 +35,9 @@ TEMPO = 300
 LIMITE = 3
 AFILIADO = "?utm_source=telegram"
 
-app_bot = Application.builder().token(TOKEN).build()
+FALLBACK_IMAGE = "https://via.placeholder.com/600x400.png"
+
+bot = Bot(token=TOKEN)
 
 # ================= BANCO =================
 
@@ -58,26 +59,35 @@ def salvar(link):
     cursor.execute("INSERT OR IGNORE INTO ofertas(link) VALUES(?)", (link,))
     conn.commit()
 
-# ================= ANTI-BAN RATE LIMIT =================
+# ================= RATE LIMIT ANTI-BAN =================
 
-class RateLimiter:
-    def __init__(self):
-        self.last_send = 0
-        self.min_delay = 12  # base segura Telegram
+async def rate_limit():
+    await asyncio.sleep(random.uniform(8, 18))
 
-    async def wait(self):
-        now = time.time()
-        diff = now - self.last_send
+# ================= VALIDAÇÃO DE IMAGEM =================
 
-        jitter = random.uniform(3, 10)
-        wait_time = self.min_delay + jitter - diff
+def imagem_valida(url):
+    try:
+        if not url:
+            return False
 
-        if wait_time > 0:
-            await asyncio.sleep(wait_time)
+        headers = {"User-Agent": "Mozilla/5.0"}
 
-        self.last_send = time.time()
+        r = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
 
-rate_limiter = RateLimiter()
+        if r.status_code != 200:
+            return False
+
+        content_type = r.headers.get("Content-Type", "")
+        return content_type.startswith("image/")
+
+    except:
+        return False
+
+# ================= LINK =================
+
+def link_valido(link):
+    return link and link.startswith("http") and "promobit" in link
 
 # ================= SCRAPING =================
 
@@ -103,26 +113,24 @@ def pegar_ofertas():
             if link.startswith("/"):
                 link = URL + link
 
-            if "promobit" not in link:
+            if not link_valido(link):
                 continue
 
             preco = "Preço não encontrado"
-
             p = re.findall(r"R\$\s?\d+[.,]?\d*", titulo)
             if p:
                 preco = p[0]
 
-            img = item.find("img")
-            imagem = None
-
-            if img:
-                imagem = img.get("data-src") or img.get("src")
+            img = None
+            image_tag = item.find("img")
+            if image_tag:
+                img = image_tag.get("data-src") or image_tag.get("src")
 
             ofertas.append({
                 "titulo": titulo,
                 "link": link + AFILIADO,
                 "preco": preco,
-                "imagem": imagem
+                "imagem": img
             })
 
         except:
@@ -130,37 +138,16 @@ def pegar_ofertas():
 
     return ofertas
 
-# ================= IMAGEM SEGURA =================
-
-def baixar_imagem(url):
-    try:
-        if not url:
-            return None
-
-        headers = {"User-Agent": "Mozilla/5.0"}
-
-        r = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
-
-        if not r.headers.get("Content-Type", "").startswith("image/"):
-            return None
-
-        if len(r.content) < 1500:
-            return None
-
-        return r.content
-
-    except:
-        return None
-
 # ================= BOT LOOP =================
 
 async def bot_loop():
-    print("BOT INICIADO")
+
+    print("BOT INICIADO", flush=True)
 
     while True:
         try:
             ofertas = pegar_ofertas()
-            print("OFERTAS:", len(ofertas))
+            print("OFERTAS:", len(ofertas), flush=True)
 
             enviados = 0
 
@@ -179,46 +166,47 @@ async def bot_loop():
 💰 {o['preco']}
 """
 
-                teclado = InlineKeyboardMarkup([[
+                keyboard = InlineKeyboardMarkup([[
                     InlineKeyboardButton("🛒 Comprar", url=o["link"])
                 ]])
 
-                # 🔥 ANTI-BAN APLICADO AQUI
-                await rate_limiter.wait()
+                img = o["imagem"]
 
-                img_bytes = baixar_imagem(o["imagem"])
+                # valida imagem real
+                if not imagem_valida(img):
+                    img = FALLBACK_IMAGE
 
-                if not img_bytes:
-                    img_bytes = requests.get(
-                        "https://static.promobit.com.br/assets/img/promobit-logo.png"
-                    ).content
+                try:
+                    await bot.send_photo(
+                        chat_id=CHAT_ID,
+                        photo=img,
+                        caption=msg[:1020],
+                        reply_markup=keyboard
+                    )
 
-                await app_bot.bot.send_photo(
-                    chat_id=CHAT_ID,
-                    photo=BytesIO(img_bytes),
-                    caption=msg,
-                    reply_markup=teclado
-                )
+                    salvar(o["link"])
+                    enviados += 1
 
-                salvar(o["link"])
-                enviados += 1
+                    print("ENVIADO:", o["titulo"], flush=True)
 
-                print("ENVIADO:", o["titulo"])
+                except Exception as e:
+                    print("ERRO ENVIO:", repr(e), flush=True)
 
-            # pausa inteligente entre ciclos (não fixa)
-            await asyncio.sleep(TEMPO + random.uniform(5, 30))
+                await rate_limit()
+
+            print("AGUARDANDO...", flush=True)
+            await asyncio.sleep(TEMPO)
 
         except Exception as e:
-            print("ERRO BOT:", repr(e))
-            await asyncio.sleep(20)
+            print("ERRO BOT:", repr(e), flush=True)
+            await asyncio.sleep(30)
 
 # ================= START =================
 
 async def main():
-    import threading
     threading.Thread(target=run_web, daemon=True).start()
     await bot_loop()
 
 if __name__ == "__main__":
-    print("INICIANDO SISTEMA...")
+    print("INICIANDO SISTEMA...", flush=True)
     asyncio.run(main())
