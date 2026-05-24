@@ -188,189 +188,57 @@ def pegar_produtos():
     # MERCADO LIVRE
     # =====================================
 
-    try:
+    produtos.append({
+        "titulo": "Xiaomi Redmi Note 13 256GB",
+        "preco": "R$ 1.299",
+        "link": "https://www.mercadolivre.com.br/",
+        "imagem": "https://http2.mlstatic.com/D_NQ_NP_2X_968743-MLA74651738775_022024-F.webp"
+    })
 
-        url_ml = (
-            "https://api.mercadolibre.com/sites/MLB/"
-            "search?q=smartphone"
-        )
-
-        r = requests.get(
-            url_ml,
-            headers=HEADERS,
-            timeout=30
-        )
-
-        data = r.json()
-
-        for item in data.get("results", [])[:20]:
-
-            try:
-
-                titulo = item.get("title")
-
-                preco = item.get("price")
-
-                link = item.get("permalink")
-
-                imagem = item.get("thumbnail")
-
-                if not titulo or not link:
-                    continue
-
-                produtos.append({
-                    "titulo": titulo,
-                    "preco": f"R$ {preco}",
-                    "link": link + AFILIADO,
-                    "imagem": imagem
-                })
-
-            except:
-                pass
-
-    except Exception as e:
-
-        print(
-            "ERRO ML:",
-            repr(e),
-            flush=True
-        )
+    produtos.append({
+        "titulo": "Fone Bluetooth JBL Tune 520BT",
+        "preco": "R$ 189",
+        "link": "https://www.mercadolivre.com.br/",
+        "imagem": "https://http2.mlstatic.com/D_NQ_NP_2X_879076-MLU72637323341_112023-F.webp"
+    })
 
     # =====================================
     # SHOPEE
     # =====================================
 
-    try:
+    produtos.append({
+        "titulo": "Smartwatch Ultra AMOLED",
+        "preco": "R$ 89",
+        "link": "https://shopee.com.br/",
+        "imagem": "https://down-br.img.susercontent.com/file/br-11134207-7r98o-ls0xq4q7j5r8b0"
+    })
 
-        shopee_url = (
-            "https://shopee.com.br/api/v4/search/search_items"
-            "?by=relevancy"
-            "&keyword=smartphone"
-            "&limit=20"
-            "&newest=0"
-            "&order=desc"
-            "&page_type=search"
-            "&scenario=PAGE_GLOBAL_SEARCH"
-            "&version=2"
-        )
-
-        r = requests.get(
-            shopee_url,
-            headers={
-                **HEADERS,
-                "Referer": "https://shopee.com.br/"
-            },
-            timeout=30
-        )
-
-        data = r.json()
-
-        items = data.get("items", [])
-
-        for item in items:
-
-            try:
-
-                item_basic = item.get(
-                    "item_basic",
-                    {}
-                )
-
-                titulo = item_basic.get("name")
-
-                preco = (
-                    item_basic.get("price", 0)
-                    / 100000
-                )
-
-                itemid = item_basic.get("itemid")
-
-                shopid = item_basic.get("shopid")
-
-                imagem = item_basic.get("image")
-
-                if not titulo:
-                    continue
-
-                link = (
-                    f"https://shopee.com.br/product/"
-                    f"{shopid}/{itemid}"
-                )
-
-                img = (
-                    f"https://cf.shopee.com.br/file/{imagem}"
-                    if imagem else None
-                )
-
-                produtos.append({
-                    "titulo": titulo,
-                    "preco": f"R$ {preco:.2f}",
-                    "link": link + AFILIADO,
-                    "imagem": img
-                })
-
-            except:
-                pass
-
-    except Exception as e:
-
-        print(
-            "ERRO SHOPEE:",
-            repr(e),
-            flush=True
-        )
+    produtos.append({
+        "titulo": "Headset Gamer RGB",
+        "preco": "R$ 119",
+        "link": "https://shopee.com.br/",
+        "imagem": "https://down-br.img.susercontent.com/file/br-11134207-7r98o-lm9jz8n6x8i2b7"
+    })
 
     # =====================================
     # AMAZON
     # =====================================
 
-    try:
+    produtos.append({
+        "titulo": "Echo Dot 5ª Geração Alexa",
+        "preco": "R$ 299",
+        "link": "https://www.amazon.com.br/dp/B09B8YWXDF",
+        "imagem": "https://m.media-amazon.com/images/I/61u48FEsdBL._AC_SL1000_.jpg"
+    })
 
-        amazon_produtos = [
-            {
-                "titulo": "Echo Dot 5ª Geração Alexa",
-                "preco": "R$ 299",
-                "link": (
-                    "https://www.amazon.com.br/"
-                ),
-                "imagem": (
-                    "https://m.media-amazon.com/images/I/"
-                    "61u48FEsdBL._AC_SL1000_.jpg"
-                )
-            },
-            {
-                "titulo": "Fire TV Stick HD",
-                "preco": "R$ 249",
-                "link": (
-                    "https://www.amazon.com.br/"
-                ),
-                "imagem": (
-                    "https://m.media-amazon.com/images/I/"
-                    "51TjJOTfslL._AC_SL1000_.jpg"
-                )
-            },
-            {
-                "titulo": "Kindle 11ª Geração",
-                "preco": "R$ 499",
-                "link": (
-                    "https://www.amazon.com.br/"
-                ),
-                "imagem": (
-                    "https://m.media-amazon.com/images/I/"
-                    "61L1ItFgFHL._AC_SL1000_.jpg"
-                )
-            }
-        ]
+    produtos.append({
+        "titulo": "Fire TV Stick HD",
+        "preco": "R$ 249",
+        "link": "https://www.amazon.com.br/dp/B0BJM7K3W3",
+        "imagem": "https://m.media-amazon.com/images/I/51TjJOTfslL._AC_SL1000_.jpg"
+    })
 
-        produtos.extend(amazon_produtos)
-
-    except Exception as e:
-
-        print(
-            "ERRO AMAZON:",
-            repr(e),
-            flush=True
-        )
+    random.shuffle(produtos)
 
     return produtos
 
