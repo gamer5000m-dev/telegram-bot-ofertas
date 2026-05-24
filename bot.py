@@ -3,213 +3,222 @@ import asyncio
 import time
 import os
 import requests
-import re
-import sqlite3
 import random
+import sqlite3
 
-from flask import Flask
-from bs4 import BeautifulSoup
-
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram import Bot
-
-# ================= FLASK =================
-
-app = Flask(__name__)
-
-@app.route("/")
-def home():
-    return "Bot rodando OK"
-
-def run_web():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+from flask import Flask, request
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 
 # ================= CONFIG =================
 
-TOKEN = ""
-CHAT_ID = 
-
-URL = "https://www.promobit.com.br"
-TEMPO = 300
-LIMITE = 3
-AFILIADO = "?utm_source=telegram"
-
-FALLBACK_IMAGE = "https://via.placeholder.com/600x400.png"
+TOKEN = "8391542912:AAH1cduJ0E7naPhA0z6uezCgkbLn1BjyQDE"
+CHAT_ID = -1003914285353
 
 bot = Bot(token=TOKEN)
 
+app = Flask(__name__)
+
+# ================= PAINEL ADMIN =================
+
+CONFIG = {
+    "min_desconto": 20,
+    "keywords": ["smartphone", "fone", "teclado"],
+    "cooldown": 8
+}
+
+@app.route("/")
+def home():
+    return "BOT ONLINE"
+
+@app.route("/config")
+def config():
+    return CONFIG
+
+@app.route("/set_desconto")
+def set_desconto():
+    CONFIG["min_desconto"] = int(request.args.get("v", 20))
+    return "OK"
+
 # ================= BANCO =================
 
-conn = sqlite3.connect("ofertas.db", check_same_thread=False)
+conn = sqlite3.connect("produtos.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
-CREATE TABLE IF NOT EXISTS ofertas (
+CREATE TABLE IF NOT EXISTS enviados (
     link TEXT PRIMARY KEY
 )
 """)
 conn.commit()
 
 def ja_enviado(link):
-    cursor.execute("SELECT 1 FROM ofertas WHERE link=?", (link,))
+    cursor.execute("SELECT 1 FROM enviados WHERE link=?", (link,))
     return cursor.fetchone()
 
 def salvar(link):
-    cursor.execute("INSERT OR IGNORE INTO ofertas(link) VALUES(?)", (link,))
+    cursor.execute("INSERT OR IGNORE INTO enviados VALUES(?)", (link,))
     conn.commit()
 
 # ================= RATE LIMIT =================
 
 async def rate_limit():
-    await asyncio.sleep(random.uniform(8, 16))
+    await asyncio.sleep(random.uniform(6, 14))
 
-# ================= SCRAPING =================
+# ================= MERCADO LIVRE =================
 
-def link_valido(link):
-    return link and link.startswith("http") and "promobit" in link
+def ml_search(keyword):
+    url = f"https://api.mercadolibre.com/sites/MLB/search?q={keyword}&limit=10"
+    r = requests.get(url, timeout=10)
+    data = r.json()
 
-def pegar_ofertas():
+    produtos = []
+
+    for item in data["results"]:
+        produtos.append({
+            "titulo": item["title"],
+            "preco": float(item["price"]),
+            "imagem": item["thumbnail"],
+            "link": item["permalink"],
+            "loja": "Mercado Livre",
+            "desconto": 25  # placeholder (ML não traz desconto direto)
+        })
+
+    return produtos
+
+# ================= SHOPEE =================
+
+def shopee_search(keyword):
+    url = f"https://shopee.com.br/api/v4/search/search_items?keyword={keyword}&limit=10"
     headers = {"User-Agent": "Mozilla/5.0"}
 
-    r = requests.get(URL, headers=headers, timeout=30)
-    soup = BeautifulSoup(r.text, "html.parser")
+    r = requests.get(url, headers=headers, timeout=10)
+    data = r.json()
 
-    ofertas = []
+    produtos = []
 
-    for item in soup.find_all("a"):
+    for item in data.get("items", []):
+        p = item["item_basic"]
+
+        produtos.append({
+            "titulo": p["name"],
+            "preco": p["price"] / 100000,
+            "imagem": "https://cf.shopee.com.br/file/" + p["image"],
+            "link": f"https://shopee.com.br/product/{p['shopid']}/{p['itemid']}",
+            "loja": "Shopee",
+            "desconto": 30
+        })
+
+    return produtos
+
+# ================= COLETOR =================
+
+def coletar_produtos():
+    produtos = []
+
+    for k in CONFIG["keywords"]:
         try:
-            titulo = item.get_text(strip=True)
-            link = item.get("href")
-
-            if not titulo or not link:
-                continue
-
-            if len(titulo) < 20:
-                continue
-
-            if link.startswith("/"):
-                link = URL + link
-
-            if not link_valido(link):
-                continue
-
-            preco = "Preço não encontrado"
-            p = re.findall(r"R\$\s?\d+[.,]?\d*", titulo)
-            if p:
-                preco = p[0]
-
-            img = None
-            tag_img = item.find("img")
-            if tag_img:
-                img = tag_img.get("data-src") or tag_img.get("src")
-
-            ofertas.append({
-                "titulo": titulo,
-                "link": link + AFILIADO,
-                "preco": preco,
-                "imagem": img
-            })
-
+            produtos += ml_search(k)
+            produtos += shopee_search(k)
         except:
             continue
 
-    return ofertas
+    return produtos
 
-# ================= DOWNLOAD IMAGEM (CORREÇÃO FINAL) =================
+# ================= FILTRO =================
 
-def baixar_imagem(url):
+def filtrar(produtos):
+    filtrados = []
+
+    for p in produtos:
+
+        if len(p["titulo"]) < 20:
+            continue
+
+        if p["preco"] <= 0:
+            continue
+
+        if p["desconto"] < CONFIG["min_desconto"]:
+            continue
+
+        filtrados.append(p)
+
+    return filtrados
+
+# ================= ENVIO TELEGRAM =================
+
+async def enviar(p):
+
+    msg = f"""🔥 OFERTA {p['loja']}
+
+📦 {p['titulo']}
+
+💰 R$ {p['preco']}
+🔥 {p['desconto']}% OFF
+"""
+
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🛒 Comprar", url=p["link"])
+    ]])
+
     try:
-        if not url:
-            return None
-
-        headers = {"User-Agent": "Mozilla/5.0"}
-
-        r = requests.get(url, headers=headers, timeout=10, stream=True)
-
-        if r.status_code != 200:
-            return None
-
-        content_type = r.headers.get("Content-Type", "")
-        if not content_type.startswith("image/"):
-            return None
-
-        return r.content
-
+        await bot.send_photo(
+            chat_id=CHAT_ID,
+            photo=p["imagem"],
+            caption=msg[:1020],
+            reply_markup=keyboard
+        )
     except:
-        return None
+        await bot.send_message(
+            chat_id=CHAT_ID,
+            text=msg + f"\n\n{p['link']}",
+            reply_markup=keyboard
+        )
 
-# ================= BOT LOOP =================
+# ================= LOOP PRINCIPAL =================
 
-async def bot_loop():
+async def loop():
 
     print("BOT INICIADO", flush=True)
 
+    enviados = set()
+
     while True:
-        try:
-            ofertas = pegar_ofertas()
-            print("OFERTAS:", len(ofertas), flush=True)
 
-            enviados = 0
+        produtos = coletar_produtos()
+        produtos = filtrar(produtos)
 
-            for o in ofertas:
+        print("PRODUTOS:", len(produtos), flush=True)
 
-                if enviados >= LIMITE:
-                    break
+        for p in produtos:
 
-                if ja_enviado(o["link"]):
-                    continue
+            if p["link"] in enviados:
+                continue
 
-                msg = f"""🔥 OFERTA NOVA
+            try:
+                await enviar(p)
+                salvar(p["link"])
+                enviados.add(p["link"])
 
-📦 {o['titulo']}
-
-💰 {o['preco']}
-"""
-
-                keyboard = InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🛒 Comprar", url=o["link"])
-                ]])
-
-                img_bytes = baixar_imagem(o["imagem"])
-
-                try:
-                    if img_bytes:
-                        await bot.send_photo(
-                            chat_id=CHAT_ID,
-                            photo=img_bytes,
-                            caption=msg[:1020],
-                            reply_markup=keyboard
-                        )
-                    else:
-                        await bot.send_message(
-                            chat_id=CHAT_ID,
-                            text=msg + f"\n\n🛒 {o['link']}",
-                            reply_markup=keyboard
-                        )
-
-                    salvar(o["link"])
-                    enviados += 1
-
-                    print("ENVIADO:", o["titulo"], flush=True)
-
-                except Exception as e:
-                    print("ERRO ENVIO:", repr(e), flush=True)
+                print("ENVIADO:", p["titulo"])
 
                 await rate_limit()
 
-            print("AGUARDANDO...", flush=True)
-            await asyncio.sleep(TEMPO)
+            except Exception as e:
+                print("ERRO:", repr(e))
 
-        except Exception as e:
-            print("ERRO BOT:", repr(e), flush=True)
-            await asyncio.sleep(30)
+        await asyncio.sleep(300)
+
+# ================= FLASK THREAD =================
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
 
 # ================= START =================
 
 async def main():
-    threading.Thread(target=run_web, daemon=True).start()
-    await bot_loop()
+    threading.Thread(target=run_flask, daemon=True).start()
+    await loop()
 
 if __name__ == "__main__":
     print("INICIANDO SISTEMA...", flush=True)
