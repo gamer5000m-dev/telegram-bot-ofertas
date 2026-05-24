@@ -52,9 +52,25 @@ HEADERS = {
 }
 
 FONTES = [
-    "https://www.pelando.com.br/grupo/amazon",
-    "https://www.pelando.com.br/grupo/shopee",
-    "https://www.pelando.com.br/grupo/mercado-livre"
+
+    {
+        "nome": "Amazon",
+        "url": "https://www.amazon.com.br/deals",
+        "dominio": "amazon"
+    },
+
+    {
+        "nome": "Mercado Livre",
+        "url": "https://www.mercadolivre.com.br/ofertas",
+        "dominio": "mercadolivre"
+    },
+
+    {
+        "nome": "Shopee",
+        "url": "https://shopee.com.br/m/ofertas-do-dia",
+        "dominio": "shopee"
+    }
+
 ]
 
 KEYWORDS_BLOQUEADAS = [
@@ -157,9 +173,11 @@ def pegar_produtos():
 
     produtos = []
 
-    for url in FONTES:
+    for fonte in FONTES:
 
         try:
+
+            url = fonte["url"]
 
             r = requests.get(
                 url,
@@ -172,9 +190,9 @@ def pegar_produtos():
                 "html.parser"
             )
 
-            ofertas = soup.find_all("article")
+            links = soup.find_all("a")
 
-            for item in ofertas:
+            for item in links:
 
                 try:
 
@@ -183,85 +201,71 @@ def pegar_produtos():
                         strip=True
                     )
 
+                    if not texto:
+                        continue
+
+                    if len(texto) < 20:
+                        continue
+
                     if "R$" not in texto:
                         continue
 
-                    if len(texto) < 40:
-                        continue
-
-                    texto_lower = texto.lower()
-
-                    if any(
-                        palavra in texto_lower
-                        for palavra in KEYWORDS_BLOQUEADAS
-                    ):
-                        continue
-
-                    titulo = ""
-
-                    h2 = item.find("h2")
-
-                    if h2:
-                        titulo = h2.get_text(
-                            " ",
-                            strip=True
-                        )
-
-                    if not titulo:
-                        continue
-
-                    # PREÇO
-
-                    preco = None
-
-                    p = re.search(
-                        r"R\$\s?[\d\.,]+",
-                        texto
-                    )
-
-                    if p:
-                        preco = p.group(0)
-
-                    if not preco:
-                        continue
-
-                    # DESCONTO
-
-                    desconto = ""
-
-                    d = re.search(
-                        r"(\d+)%",
-                        texto
-                    )
-
-                    if d:
-                        desconto = d.group(1) + "% OFF"
-
-                    # LINK
-
-                    link = None
-
-                    a = item.find("a")
-
-                    if a:
-
-                        href = a.get("href")
-
-                        if href:
-
-                            if href.startswith("/"):
-                                link = (
-                                    "https://www.pelando.com.br"
-                                    + href
-                                )
-
-                            else:
-                                link = href
+                    link = item.get("href")
 
                     if not link:
                         continue
 
+                    # ====================================
+                    # LINK ABSOLUTO
+                    # ====================================
+
+                    if link.startswith("/"):
+
+                        if fonte["dominio"] == "amazon":
+                            link = (
+                                "https://www.amazon.com.br"
+                                + link
+                            )
+
+                        elif fonte["dominio"] == "mercadolivre":
+                            link = (
+                                "https://www.mercadolivre.com.br"
+                                + link
+                            )
+
+                        elif fonte["dominio"] == "shopee":
+                            link = (
+                                "https://shopee.com.br"
+                                + link
+                            )
+
+                    if "http" not in link:
+                        continue
+
+                    # ====================================
+                    # FILTRO LOJA OFICIAL
+                    # ====================================
+
+                    if fonte["dominio"] not in link:
+                        continue
+
+                    # ====================================
+                    # PREÇO
+                    # ====================================
+
+                    preco = "🔥 Oferta"
+
+                    preco_match = re.search(
+                        r"R\$\s?[\d\.,]+",
+                        texto
+                    )
+
+                    if preco_match:
+                        preco = preco_match.group(0)
+
+                    # ====================================
                     # IMAGEM
+                    # ====================================
 
                     imagem = None
 
@@ -273,23 +277,18 @@ def pegar_produtos():
                             img.get("src")
                             or img.get("data-src")
                             or img.get("data-lazy-src")
-                            or img.get("data-original")
                         )
 
-                    if imagem:
-
-                        if imagem.startswith("//"):
-                            imagem = "https:" + imagem
-
-                        if ".svg" in imagem:
-                            imagem = None
-
                     produtos.append({
-                        "titulo": titulo[:150],
+
+                        "titulo": texto[:180],
+
                         "preco": preco,
-                        "desconto": desconto,
-                        "link": link,
+
+                        "link": link + AFILIADO,
+
                         "imagem": imagem
+
                     })
 
                 except:
