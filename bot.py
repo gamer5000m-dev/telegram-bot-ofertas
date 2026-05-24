@@ -1,47 +1,69 @@
-import threading
-import asyncio
-import time
 import os
+import asyncio
+import sqlite3
+import threading
 import requests
 import random
-import sqlite3
+import time
 
-from flask import Flask, request
-from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
+from flask import Flask, jsonify
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application
 
-# ================= CONFIG =================
-
-TOKEN = "8391542912:AAH1cduJ0E7naPhA0z6uezCgkbLn1BjyQDE"
-CHAT_ID = -1003914285353
-
-bot = Bot(token=TOKEN)
+# =========================================
+# FLASK WEB
+# =========================================
 
 app = Flask(__name__)
 
-# ================= PAINEL ADMIN =================
-
-CONFIG = {
-    "min_desconto": 20,
-    "keywords": ["smartphone", "fone", "teclado"],
-    "cooldown": 8
-}
-
 @app.route("/")
 def home():
-    return "BOT ONLINE"
+    return jsonify({
+        "status": "online",
+        "bot": "Canal de Ofertas"
+    })
 
-@app.route("/config")
-def config():
-    return CONFIG
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
 
-@app.route("/set_desconto")
-def set_desconto():
-    CONFIG["min_desconto"] = int(request.args.get("v", 20))
-    return "OK"
+    app.run(
+        host="0.0.0.0",
+        port=port,
+        debug=False,
+        use_reloader=False
+    )
 
-# ================= BANCO =================
+# =========================================
+# CONFIG
+# =========================================
 
-conn = sqlite3.connect("produtos.db", check_same_thread=False)
+TOKEN = os.environ.get("TOKEN")
+CHAT_ID = int(os.environ.get("CHAT_ID"))
+
+TEMPO_LOOP = 300
+
+# anti-ban inteligente
+DELAY_MIN = 15
+DELAY_MAX = 40
+
+# quantidade máxima por ciclo
+MAX_ENVIOS = 5
+
+# desconto mínimo
+DESCONTO_MINIMO = 20
+
+# =========================================
+# TELEGRAM
+# =========================================
+
+telegram_app = Application.builder().token(TOKEN).build()
+
+# =========================================
+# BANCO SQLITE
+# =========================================
+
+conn = sqlite3.connect("ofertas.db", check_same_thread=False)
+
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -49,177 +71,325 @@ CREATE TABLE IF NOT EXISTS enviados (
     link TEXT PRIMARY KEY
 )
 """)
+
 conn.commit()
 
 def ja_enviado(link):
-    cursor.execute("SELECT 1 FROM enviados WHERE link=?", (link,))
-    return cursor.fetchone()
+    cursor.execute(
+        "SELECT 1 FROM enviados WHERE link=?",
+        (link,)
+    )
+
+    return cursor.fetchone() is not None
 
 def salvar(link):
-    cursor.execute("INSERT OR IGNORE INTO enviados VALUES(?)", (link,))
+    cursor.execute(
+        "INSERT OR IGNORE INTO enviados(link) VALUES(?)",
+        (link,)
+    )
+
     conn.commit()
 
-# ================= RATE LIMIT =================
+# =========================================
+# CATEGORIAS
+# =========================================
 
-async def rate_limit():
-    await asyncio.sleep(random.uniform(6, 14))
+CATEGORIAS = {
+    "iphone": "📱 Smartphones",
+    "samsung": "📱 Smartphones",
+    "xiaomi": "📱 Smartphones",
+    "notebook": "💻 Informática",
+    "pc gamer": "💻 Informática",
+    "tv": "📺 TVs",
+    "monitor": "📺 TVs",
+    "fone": "🎧 Áudio",
+    "headset": "🎧 Áudio",
+    "air fryer": "🍳 Cozinha",
+    "cadeira gamer": "🪑 Gamer",
+    "playstation": "🎮 Games",
+    "xbox": "🎮 Games"
+}
 
-# ================= MERCADO LIVRE =================
+def descobrir_categoria(nome):
 
-def ml_search(keyword):
-    url = f"https://api.mercadolibre.com/sites/MLB/search?q={keyword}&limit=10"
-    r = requests.get(url, timeout=10)
-    data = r.json()
+    nome = nome.lower()
+
+    for chave, categoria in CATEGORIAS.items():
+
+        if chave in nome:
+            return categoria
+
+    return "🛒 Ofertas"
+
+# =========================================
+# APIs / FEEDS
+# =========================================
+
+def pegar_produtos():
 
     produtos = []
 
-    for item in data["results"]:
-        produtos.append({
-            "titulo": item["title"],
-            "preco": float(item["price"]),
-            "imagem": item["thumbnail"],
-            "link": item["permalink"],
-            "loja": "Mercado Livre",
-            "desconto": 25  # placeholder (ML não traz desconto direto)
-        })
-
-    return produtos
-
-# ================= SHOPEE =================
-
-def shopee_search(keyword):
-    url = f"https://shopee.com.br/api/v4/search/search_items?keyword={keyword}&limit=10"
-    headers = {"User-Agent": "Mozilla/5.0"}
-
-    r = requests.get(url, headers=headers, timeout=10)
-    data = r.json()
-
-    produtos = []
-
-    for item in data.get("items", []):
-        p = item["item_basic"]
-
-        produtos.append({
-            "titulo": p["name"],
-            "preco": p["price"] / 100000,
-            "imagem": "https://cf.shopee.com.br/file/" + p["image"],
-            "link": f"https://shopee.com.br/product/{p['shopid']}/{p['itemid']}",
-            "loja": "Shopee",
-            "desconto": 30
-        })
-
-    return produtos
-
-# ================= COLETOR =================
-
-def coletar_produtos():
-    produtos = []
-
-    for k in CONFIG["keywords"]:
-        try:
-            produtos += ml_search(k)
-            produtos += shopee_search(k)
-        except:
-            continue
-
-    return produtos
-
-# ================= FILTRO =================
-
-def filtrar(produtos):
-    filtrados = []
-
-    for p in produtos:
-
-        if len(p["titulo"]) < 20:
-            continue
-
-        if p["preco"] <= 0:
-            continue
-
-        if p["desconto"] < CONFIG["min_desconto"]:
-            continue
-
-        filtrados.append(p)
-
-    return filtrados
-
-# ================= ENVIO TELEGRAM =================
-
-async def enviar(p):
-
-    msg = f"""🔥 OFERTA {p['loja']}
-
-📦 {p['titulo']}
-
-💰 R$ {p['preco']}
-🔥 {p['desconto']}% OFF
-"""
-
-    keyboard = InlineKeyboardMarkup([[
-        InlineKeyboardButton("🛒 Comprar", url=p["link"])
-    ]])
+    # =====================================
+    # MERCADO LIVRE
+    # =====================================
 
     try:
-        await bot.send_photo(
-            chat_id=CHAT_ID,
-            photo=p["imagem"],
-            caption=msg[:1020],
-            reply_markup=keyboard
+
+        url = "https://api.mercadolibre.com/sites/MLB/search?q=iphone"
+
+        r = requests.get(url, timeout=30)
+
+        data = r.json()
+
+        for item in data.get("results", [])[:10]:
+
+            preco = float(item.get("price", 0))
+
+            original = item.get("original_price")
+
+            desconto = 0
+
+            if original and original > preco:
+                desconto = int(
+                    ((original - preco) / original) * 100
+                )
+
+            if desconto < DESCONTO_MINIMO:
+                continue
+
+            produtos.append({
+                "titulo": item.get("title"),
+                "preco": f"R$ {preco:.2f}",
+                "desconto": desconto,
+                "imagem": item.get("thumbnail"),
+                "link": item.get("permalink"),
+                "loja": "🟨 Mercado Livre"
+            })
+
+    except Exception as e:
+        print("ERRO ML:", e, flush=True)
+
+    # =====================================
+    # AMAZON (RSS FEED)
+    # =====================================
+
+    try:
+
+        feed = requests.get(
+            "https://rss.app/feeds/v1.1/_amazon.xml",
+            timeout=30
         )
-    except:
-        await bot.send_message(
+
+        if feed.status_code == 200:
+
+            # fallback fake parsing
+            pass
+
+    except Exception as e:
+        print("ERRO AMAZON:", e, flush=True)
+
+    # =====================================
+    # SHOPEE (fallback)
+    # =====================================
+
+    try:
+
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+
+        r = requests.get(
+            "https://shopee.com.br/search?keyword=iphone",
+            headers=headers,
+            timeout=30
+        )
+
+        if r.status_code == 200:
+            pass
+
+    except Exception as e:
+        print("ERRO SHOPEE:", e, flush=True)
+
+    return produtos
+
+# =========================================
+# TEXTO BONITO
+# =========================================
+
+def montar_legenda(produto):
+
+    categoria = descobrir_categoria(
+        produto["titulo"]
+    )
+
+    texto = f"""
+🔥 OFERTA ENCONTRADA
+
+{categoria}
+
+📦 {produto['titulo']}
+
+💰 {produto['preco']}
+
+🏷 Desconto: {produto['desconto']}%
+
+🏪 {produto['loja']}
+
+⚡ Promoção pode acabar a qualquer momento!
+"""
+
+    return texto
+
+# =========================================
+# ENVIO TELEGRAM
+# =========================================
+
+async def enviar_produto(produto):
+
+    try:
+
+        legenda = montar_legenda(produto)
+
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "🛒 COMPRAR AGORA",
+                    url=produto["link"]
+                )
+            ]
+        ])
+
+        imagem = produto["imagem"]
+
+        if imagem and imagem.startswith("//"):
+            imagem = "https:" + imagem
+
+        # =================================
+        # FOTO
+        # =================================
+
+        if imagem:
+
+            try:
+
+                response = requests.get(
+                    imagem,
+                    timeout=15
+                )
+
+                if response.status_code == 200:
+
+                    await telegram_app.bot.send_photo(
+                        chat_id=CHAT_ID,
+                        photo=response.content,
+                        caption=legenda,
+                        reply_markup=keyboard
+                    )
+
+                    return True
+
+            except Exception as e:
+                print("ERRO FOTO:", e, flush=True)
+
+        # =================================
+        # FALLBACK TEXTO
+        # =================================
+
+        await telegram_app.bot.send_message(
             chat_id=CHAT_ID,
-            text=msg + f"\n\n{p['link']}",
+            text=legenda,
             reply_markup=keyboard
         )
 
-# ================= LOOP PRINCIPAL =================
+        return True
 
-async def loop():
+    except Exception as e:
+
+        print("ERRO ENVIO:", repr(e), flush=True)
+
+        return False
+
+# =========================================
+# LOOP
+# =========================================
+
+async def bot_loop():
 
     print("BOT INICIADO", flush=True)
 
-    enviados = set()
-
     while True:
 
-        produtos = coletar_produtos()
-        produtos = filtrar(produtos)
+        try:
 
-        print("PRODUTOS:", len(produtos), flush=True)
+            produtos = pegar_produtos()
 
-        for p in produtos:
+            print(
+                "PRODUTOS:",
+                len(produtos),
+                flush=True
+            )
 
-            if p["link"] in enviados:
-                continue
+            enviados = 0
 
-            try:
-                await enviar(p)
-                salvar(p["link"])
-                enviados.add(p["link"])
+            for produto in produtos:
 
-                print("ENVIADO:", p["titulo"])
+                if enviados >= MAX_ENVIOS:
+                    break
 
-                await rate_limit()
+                if ja_enviado(produto["link"]):
+                    continue
 
-            except Exception as e:
-                print("ERRO:", repr(e))
+                enviado = await enviar_produto(produto)
 
-        await asyncio.sleep(300)
+                if enviado:
 
-# ================= FLASK THREAD =================
+                    salvar(produto["link"])
 
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+                    enviados += 1
 
-# ================= START =================
+                    print(
+                        "ENVIADO:",
+                        produto["titulo"],
+                        flush=True
+                    )
+
+                    # anti-ban inteligente
+                    delay = random.randint(
+                        DELAY_MIN,
+                        DELAY_MAX
+                    )
+
+                    await asyncio.sleep(delay)
+
+            print("AGUARDANDO...", flush=True)
+
+            await asyncio.sleep(TEMPO_LOOP)
+
+        except Exception as e:
+
+            print(
+                "ERRO LOOP:",
+                repr(e),
+                flush=True
+            )
+
+            await asyncio.sleep(60)
+
+# =========================================
+# MAIN
+# =========================================
 
 async def main():
-    threading.Thread(target=run_flask, daemon=True).start()
-    await loop()
+
+    threading.Thread(
+        target=run_web,
+        daemon=True
+    ).start()
+
+    await bot_loop()
 
 if __name__ == "__main__":
+
     print("INICIANDO SISTEMA...", flush=True)
+
     asyncio.run(main())
