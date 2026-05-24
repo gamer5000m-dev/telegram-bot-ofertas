@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import asyncio
 import sqlite3
 import threading
@@ -463,14 +464,41 @@ async def bot_loop():
 
 async def main():
 
-    # inicia Flask primeiro
+    print(
+        "BOT INICIADO",
+        flush=True
+    )
+
+    # inicia flask
     threading.Thread(
         target=run_web,
         daemon=True
     ).start()
 
-    # espera abrir porta
-    await asyncio.sleep(5)
+    # inicia telegram
+    await telegram_app.initialize()
+    await telegram_app.start()
 
-    # inicia bot
+    # loop principal
     await bot_loop()
+
+if __name__ == "__main__":
+
+    print(
+        "INICIANDO SISTEMA...",
+        flush=True
+    )
+
+    try:
+        asyncio.run(main())
+
+    except Exception as e:
+
+        print(
+            "ERRO FATAL:",
+            repr(e),
+            flush=True
+        )
+
+        while True:
+            time.sleep(60)
