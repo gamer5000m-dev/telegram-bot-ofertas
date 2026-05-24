@@ -391,13 +391,10 @@ async def enviar_produto(produto):
 
 📦 {titulo}
 
-💰 PREÇO: {preco}
+💰 {preco}
+
+⚡ Promoção por tempo limitado
 """
-
-    if desconto:
-        texto += f"\n🏷 DESCONTO: {desconto}"
-
-    texto += "\n\n⚡ Promoção por tempo limitado"
 
     keyboard = InlineKeyboardMarkup([
         [
