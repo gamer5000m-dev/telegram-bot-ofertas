@@ -184,11 +184,23 @@ def pegar_produtos():
 
     produtos = []
 
-    for fonte in FONTES:
+    urls = [
+        {
+            "url": "https://www.amazon.com.br/s?k=smartphone",
+            "loja": "Amazon"
+        },
+        {
+            "url": "https://lista.mercadolivre.com.br/smartphone",
+            "loja": "Mercado Livre"
+        }
+    ]
+
+    for fonte in urls:
 
         try:
 
             url = fonte["url"]
+            loja = fonte["loja"]
 
             r = requests.get(
                 url,
@@ -196,120 +208,113 @@ def pegar_produtos():
                 timeout=30
             )
 
+            html = r.text
+
             print(
                 "HTML:",
-                len(r.text),
+                len(html),
                 flush=True
             )
 
             soup = BeautifulSoup(
-                r.text,
+                html,
                 "html.parser"
             )
 
-            links = soup.select("a[href]")
+            # AMAZON
+            if loja == "Amazon":
 
-            for item in links:
+                items = soup.select("[data-component-type='s-search-result']")
 
-                try:
+                for item in items[:20]:
 
-                    texto = item.get_text(
-                        " ",
-                        strip=True
-                    )
+                    try:
 
-                    if not texto:
-                        continue
+                        titulo = item.select_one("h2 span")
 
-                    if len(texto) < 20:
-                        continue
+                        preco = item.select_one(".a-price-whole")
 
-                    if "R$" not in texto:
-                        continue
+                        link = item.select_one("h2 a")
 
-                    link = item.get("href")
+                        imagem = item.select_one("img")
 
-                    if not link:
-                        continue
+                        if not titulo or not link:
+                            continue
 
-                    # ====================================
-                    # LINK ABSOLUTO
-                    # ====================================
+                        titulo = titulo.get_text(strip=True)
 
-                    if link.startswith("/"):
-
-                        if fonte["dominio"] == "amazon":
-                            link = (
-                                "https://www.amazon.com.br"
-                                + link
-                            )
-
-                        elif fonte["dominio"] == "mercadolivre":
-                            link = (
-                                "https://www.mercadolivre.com.br"
-                                + link
-                            )
-
-                        elif fonte["dominio"] == "shopee":
-                            link = (
-                                "https://shopee.com.br"
-                                + link
-                            )
-
-                    if "http" not in link:
-                        continue
-
-                    # ====================================
-                    # FILTRO LOJA OFICIAL
-                    # ====================================
-
-                    if fonte["dominio"] not in link:
-                        continue
-
-                    # ====================================
-                    # PREÇO
-                    # ====================================
-
-                    preco = "🔥 Oferta"
-
-                    preco_match = re.search(
-                        r"R\$\s?[\d\.,]+",
-                        texto
-                    )
-
-                    if preco_match:
-                        preco = preco_match.group(0)
-
-                    # ====================================
-                    # IMAGEM
-                    # ====================================
-
-                    imagem = None
-
-                    img = item.find("img")
-
-                    if img:
-
-                        imagem = (
-                            img.get("src")
-                            or img.get("data-src")
-                            or img.get("data-lazy-src")
+                        preco_texto = (
+                            f"R$ {preco.get_text(strip=True)}"
+                            if preco else "Oferta"
                         )
 
-                    produtos.append({
+                        href = (
+                            "https://www.amazon.com.br"
+                            + link.get("href")
+                        )
 
-                        "titulo": texto[:180],
+                        img = (
+                            imagem.get("src")
+                            if imagem else None
+                        )
 
-                        "preco": preco,
+                        produtos.append({
+                            "titulo": titulo,
+                            "preco": preco_texto,
+                            "link": href + AFILIADO,
+                            "imagem": img
+                        })
 
-                        "link": link + AFILIADO,
+                    except:
+                        pass
 
-                        "imagem": imagem
+            # MERCADO LIVRE
+            if loja == "Mercado Livre":
 
-                    })
+                items = soup.select(".ui-search-result")
 
-                except:
-                    pass
+                for item in items[:20]:
+
+                    try:
+
+                        titulo = item.select_one(
+                            ".poly-component__title"
+                        )
+
+                        preco = item.select_one(
+                            ".andes-money-amount__fraction"
+                        )
+
+                        link = item.select_one("a")
+
+                        imagem = item.select_one("img")
+
+                        if not titulo or not link:
+                            continue
+
+                        titulo = titulo.get_text(strip=True)
+
+                        preco_texto = (
+                            f"R$ {preco.get_text(strip=True)}"
+                            if preco else "Oferta"
+                        )
+
+                        href = link.get("href")
+
+                        img = (
+                            imagem.get("src")
+                            if imagem else None
+                        )
+
+                        produtos.append({
+                            "titulo": titulo,
+                            "preco": preco_texto,
+                            "link": href + AFILIADO,
+                            "imagem": img
+                        })
+
+                    except:
+                        pass
 
         except Exception as e:
 
