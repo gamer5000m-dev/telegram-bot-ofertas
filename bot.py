@@ -190,16 +190,16 @@ def pegar_produtos():
             url = fonte["url"]
 
 r = requests.get(
-    url,
-    headers=HEADERS,
-    timeout=30
-)
+                    url,
+                    headers=HEADERS,
+                    timeout=30
+                )
 
-print(
-    "HTML:",
-    len(r.text),
-    flush=True
-)
+                print(
+                    "HTML:",
+                    len(r.text),
+                    flush=True
+                )
 
             soup = BeautifulSoup(
                 r.text,
