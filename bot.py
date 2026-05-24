@@ -187,24 +187,24 @@ def pegar_produtos():
 
         try:
 
-    url = fonte["url"]
+            url = fonte["url"]
 
-    r = requests.get(
-        url,
-        headers=HEADERS,
-        timeout=30
-    )
+            r = requests.get(
+                url,
+                headers=HEADERS,
+                timeout=30
+            )
 
-    print(
-        "HTML:",
-        len(r.text),
-        flush=True
-    )
+            print(
+                "HTML:",
+                len(r.text),
+                flush=True
+            )
 
-    soup = BeautifulSoup(
-        r.text,
-        "html.parser"
-    )
+            soup = BeautifulSoup(
+                r.text,
+                "html.parser"
+            )
 
             links = soup.select("a[href]")
 
