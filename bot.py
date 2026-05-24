@@ -382,7 +382,7 @@ async def enviar_produto(produto):
 
     titulo = produto["titulo"]
     preco = produto["preco"]
-    desconto = produto["desconto"]
+    desconto = produto.get("desconto", "Oferta")
     link = produto["link"]
     imagem = produto["imagem"]
 
