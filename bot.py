@@ -1,6 +1,5 @@
 import os
 import re
-import time
 import asyncio
 import sqlite3
 import threading
@@ -24,6 +23,7 @@ def home():
     return "BOT ONLINE"
 
 def run_web():
+
     port = int(os.environ.get("PORT", 10000))
 
     app.run(
@@ -39,17 +39,9 @@ def run_web():
 
 TOKEN = os.getenv("TOKEN")
 CHAT_ID = int(os.getenv("CHAT_ID"))
-ADMIN_KEY = os.getenv("ADMIN_KEY")
 
 TEMPO_LOOP = 300
-MAX_POSTS = 5
-
-FONTES = [
-    "https://www.promobit.com.br/",
-    "https://www.pelando.com.br/"
-]
-
-AFILIADO = "?utm_source=telegram"
+MAX_POSTS = 3
 
 HEADERS = {
     "User-Agent": (
@@ -58,6 +50,24 @@ HEADERS = {
         " Chrome/120 Safari/537.36"
     )
 }
+
+FONTES = [
+    "https://www.pelando.com.br/grupo/amazon",
+    "https://www.pelando.com.br/grupo/shopee",
+    "https://www.pelando.com.br/grupo/mercado-livre"
+]
+
+KEYWORDS_BLOQUEADAS = [
+    "grupo",
+    "telegram",
+    "whatsapp",
+    "cupom",
+    "frete grátis",
+    "comentários",
+    "login",
+    "entrar",
+    "categorias"
+]
 
 # =========================================
 # TELEGRAM
@@ -113,6 +123,9 @@ def imagem_valida(url):
         if not url:
             return False
 
+        if ".svg" in url:
+            return False
+
         r = requests.get(
             url,
             headers=HEADERS,
@@ -159,58 +172,100 @@ def pegar_produtos():
                 "html.parser"
             )
 
-            links = soup.find_all("a")
+            ofertas = soup.find_all("article")
 
-            for item in links:
+            for item in ofertas:
 
                 try:
 
-                    titulo = item.get_text(
+                    texto = item.get_text(
                         " ",
                         strip=True
                     )
 
+                    if "R$" not in texto:
+                        continue
+
+                    if len(texto) < 40:
+                        continue
+
+                    texto_lower = texto.lower()
+
+                    if any(
+                        palavra in texto_lower
+                        for palavra in KEYWORDS_BLOQUEADAS
+                    ):
+                        continue
+
+                    titulo = ""
+
+                    h2 = item.find("h2")
+
+                    if h2:
+                        titulo = h2.get_text(
+                            " ",
+                            strip=True
+                        )
+
                     if not titulo:
                         continue
 
-                    if len(titulo) < 25:
+                    # PREÇO
+
+                    preco = None
+
+                    p = re.search(
+                        r"R\$\s?[\d\.,]+",
+                        texto
+                    )
+
+                    if p:
+                        preco = p.group(0)
+
+                    if not preco:
                         continue
 
-                    link = item.get("href")
+                    # DESCONTO
+
+                    desconto = ""
+
+                    d = re.search(
+                        r"(\d+)%",
+                        texto
+                    )
+
+                    if d:
+                        desconto = d.group(1) + "% OFF"
+
+                    # LINK
+
+                    link = None
+
+                    a = item.find("a")
+
+                    if a:
+
+                        href = a.get("href")
+
+                        if href:
+
+                            if href.startswith("/"):
+                                link = (
+                                    "https://www.pelando.com.br"
+                                    + href
+                                )
+
+                            else:
+                                link = href
 
                     if not link:
                         continue
 
-                    if link.startswith("/"):
-
-                        if "promobit" in url:
-                            link = (
-                                "https://www.promobit.com.br"
-                                + link
-                            )
-
-                        elif "pelando" in url:
-                            link = (
-                                "https://www.pelando.com.br"
-                                + link
-                            )
-
-                    if "http" not in link:
-                        continue
-
-                    preco = "🔥 Oferta"
-
-                    m = re.search(
-                        r"R\$\s?[\d\.,]+",
-                        titulo
-                    )
-
-                    if m:
-                        preco = m.group(0)
-
-                    img = item.find("img")
+                    # IMAGEM
 
                     imagem = None
+
+                    img = item.find("img")
 
                     if img:
 
@@ -218,20 +273,35 @@ def pegar_produtos():
                             img.get("src")
                             or img.get("data-src")
                             or img.get("data-lazy-src")
+                            or img.get("data-original")
                         )
 
+                    if imagem:
+
+                        if imagem.startswith("//"):
+                            imagem = "https:" + imagem
+
+                        if ".svg" in imagem:
+                            imagem = None
+
                     produtos.append({
-                        "titulo": titulo[:180],
+                        "titulo": titulo[:150],
                         "preco": preco,
-                        "link": link + AFILIADO,
+                        "desconto": desconto,
+                        "link": link,
                         "imagem": imagem
                     })
 
                 except:
                     pass
 
-        except:
-            pass
+        except Exception as e:
+
+            print(
+                "ERRO SCRAP:",
+                repr(e),
+                flush=True
+            )
 
     return produtos
 
@@ -243,6 +313,7 @@ async def enviar_produto(produto):
 
     titulo = produto["titulo"]
     preco = produto["preco"]
+    desconto = produto["desconto"]
     link = produto["link"]
     imagem = produto["imagem"]
 
@@ -251,10 +322,13 @@ async def enviar_produto(produto):
 
 📦 {titulo}
 
-💰 {preco}
-
-⚡ Promoção por tempo limitado
+💰 PREÇO: {preco}
 """
+
+    if desconto:
+        texto += f"\n🏷 DESCONTO: {desconto}"
+
+    texto += "\n\n⚡ Promoção por tempo limitado"
 
     keyboard = InlineKeyboardMarkup([
         [
@@ -267,7 +341,7 @@ async def enviar_produto(produto):
 
     try:
 
-        # tenta enviar imagem real
+        # COM IMAGEM
         if imagem and imagem_valida(imagem):
 
             await telegram_app.bot.send_photo(
@@ -277,9 +351,9 @@ async def enviar_produto(produto):
                 reply_markup=keyboard
             )
 
+        # SEM IMAGEM
         else:
 
-            # fallback sem imagem
             await telegram_app.bot.send_message(
                 chat_id=CHAT_ID,
                 text=texto,
@@ -319,6 +393,8 @@ async def bot_loop():
 
             produtos = pegar_produtos()
 
+            random.shuffle(produtos)
+
             print(
                 "PRODUTOS:",
                 len(produtos),
@@ -326,8 +402,6 @@ async def bot_loop():
             )
 
             enviados = 0
-
-            random.shuffle(produtos)
 
             for produto in produtos:
 
@@ -341,8 +415,8 @@ async def bot_loop():
 
                 enviados += 1
 
-                # anti-ban inteligente
-                espera = random.randint(20, 45)
+                # ANTI BAN TELEGRAM
+                espera = random.randint(40, 90)
 
                 print(
                     f"ANTI-SPAM: {espera}s",
