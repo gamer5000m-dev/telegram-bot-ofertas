@@ -189,11 +189,17 @@ def pegar_produtos():
 
             url = fonte["url"]
 
-            r = requests.get(
-                url,
-                headers=HEADERS,
-                timeout=30
-            )
+r = requests.get(
+    url,
+    headers=HEADERS,
+    timeout=30
+)
+
+print(
+    "HTML:",
+    len(r.text),
+    flush=True
+)
 
             soup = BeautifulSoup(
                 r.text,
@@ -457,18 +463,14 @@ async def bot_loop():
 
 async def main():
 
+    # inicia Flask primeiro
     threading.Thread(
         target=run_web,
         daemon=True
     ).start()
 
+    # espera abrir porta
+    await asyncio.sleep(5)
+
+    # inicia bot
     await bot_loop()
-
-if __name__ == "__main__":
-
-    print(
-        "INICIANDO SISTEMA...",
-        flush=True
-    )
-
-    asyncio.run(main())
