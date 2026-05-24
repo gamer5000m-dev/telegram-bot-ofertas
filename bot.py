@@ -45,29 +45,39 @@ MAX_POSTS = 3
 
 HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (Linux; Android 13)"
-        " AppleWebKit/537.36"
-        " Chrome/120 Safari/537.36"
-    )
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+
+    "Accept-Language": "pt-BR,pt;q=0.9",
+
+    "Accept": (
+        "text/html,application/xhtml+xml,"
+        "application/xml;q=0.9,image/avif,"
+        "image/webp,*/*;q=0.8"
+    ),
+
+    "Connection": "keep-alive"
 }
 
 FONTES = [
 
     {
         "nome": "Amazon",
-        "url": "https://www.amazon.com.br/deals",
+        "url": "https://www.amazon.com.br/gp/goldbox",
         "dominio": "amazon"
     },
 
     {
         "nome": "Mercado Livre",
-        "url": "https://www.mercadolivre.com.br/ofertas",
+        "url": "https://lista.mercadolivre.com.br/ofertas",
         "dominio": "mercadolivre"
     },
 
     {
         "nome": "Shopee",
-        "url": "https://shopee.com.br/m/ofertas-do-dia",
+        "url": "https://shopee.com.br/ofertas",
         "dominio": "shopee"
     }
 
@@ -190,7 +200,7 @@ def pegar_produtos():
                 "html.parser"
             )
 
-            links = soup.find_all("a")
+            links = soup.select("a[href]")
 
             for item in links:
 
