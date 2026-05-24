@@ -184,145 +184,193 @@ def pegar_produtos():
 
     produtos = []
 
-    urls = [
-        {
-            "url": "https://www.amazon.com.br/s?k=smartphone",
-            "loja": "Amazon"
-        },
-        {
-            "url": "https://lista.mercadolivre.com.br/smartphone",
-            "loja": "Mercado Livre"
-        }
-    ]
+    # =====================================
+    # MERCADO LIVRE
+    # =====================================
 
-    for fonte in urls:
+    try:
 
-        try:
+        url_ml = (
+            "https://api.mercadolibre.com/sites/MLB/"
+            "search?q=smartphone"
+        )
 
-            url = fonte["url"]
-            loja = fonte["loja"]
+        r = requests.get(
+            url_ml,
+            headers=HEADERS,
+            timeout=30
+        )
 
-            r = requests.get(
-                url,
-                headers=HEADERS,
-                timeout=30
-            )
+        data = r.json()
 
-            html = r.text
+        for item in data.get("results", [])[:20]:
 
-            print(
-                "HTML:",
-                len(html),
-                flush=True
-            )
+            try:
 
-            soup = BeautifulSoup(
-                html,
-                "html.parser"
-            )
+                titulo = item.get("title")
 
-            # AMAZON
-            if loja == "Amazon":
+                preco = item.get("price")
 
-                items = soup.select("[data-component-type='s-search-result']")
+                link = item.get("permalink")
 
-                for item in items[:20]:
+                imagem = item.get("thumbnail")
 
-                    try:
+                if not titulo or not link:
+                    continue
 
-                        titulo = item.select_one("h2 span")
+                produtos.append({
+                    "titulo": titulo,
+                    "preco": f"R$ {preco}",
+                    "link": link + AFILIADO,
+                    "imagem": imagem
+                })
 
-                        preco = item.select_one(".a-price-whole")
+            except:
+                pass
 
-                        link = item.select_one("h2 a")
+    except Exception as e:
 
-                        imagem = item.select_one("img")
+        print(
+            "ERRO ML:",
+            repr(e),
+            flush=True
+        )
 
-                        if not titulo or not link:
-                            continue
+    # =====================================
+    # SHOPEE
+    # =====================================
 
-                        titulo = titulo.get_text(strip=True)
+    try:
 
-                        preco_texto = (
-                            f"R$ {preco.get_text(strip=True)}"
-                            if preco else "Oferta"
-                        )
+        shopee_url = (
+            "https://shopee.com.br/api/v4/search/search_items"
+            "?by=relevancy"
+            "&keyword=smartphone"
+            "&limit=20"
+            "&newest=0"
+            "&order=desc"
+            "&page_type=search"
+            "&scenario=PAGE_GLOBAL_SEARCH"
+            "&version=2"
+        )
 
-                        href = (
-                            "https://www.amazon.com.br"
-                            + link.get("href")
-                        )
+        r = requests.get(
+            shopee_url,
+            headers={
+                **HEADERS,
+                "Referer": "https://shopee.com.br/"
+            },
+            timeout=30
+        )
 
-                        img = (
-                            imagem.get("src")
-                            if imagem else None
-                        )
+        data = r.json()
 
-                        produtos.append({
-                            "titulo": titulo,
-                            "preco": preco_texto,
-                            "link": href + AFILIADO,
-                            "imagem": img
-                        })
+        items = data.get("items", [])
 
-                    except:
-                        pass
+        for item in items:
 
-            # MERCADO LIVRE
-            if loja == "Mercado Livre":
+            try:
 
-                items = soup.select(".ui-search-result")
+                item_basic = item.get(
+                    "item_basic",
+                    {}
+                )
 
-                for item in items[:20]:
+                titulo = item_basic.get("name")
 
-                    try:
+                preco = (
+                    item_basic.get("price", 0)
+                    / 100000
+                )
 
-                        titulo = item.select_one(
-                            ".poly-component__title"
-                        )
+                itemid = item_basic.get("itemid")
 
-                        preco = item.select_one(
-                            ".andes-money-amount__fraction"
-                        )
+                shopid = item_basic.get("shopid")
 
-                        link = item.select_one("a")
+                imagem = item_basic.get("image")
 
-                        imagem = item.select_one("img")
+                if not titulo:
+                    continue
 
-                        if not titulo or not link:
-                            continue
+                link = (
+                    f"https://shopee.com.br/product/"
+                    f"{shopid}/{itemid}"
+                )
 
-                        titulo = titulo.get_text(strip=True)
+                img = (
+                    f"https://cf.shopee.com.br/file/{imagem}"
+                    if imagem else None
+                )
 
-                        preco_texto = (
-                            f"R$ {preco.get_text(strip=True)}"
-                            if preco else "Oferta"
-                        )
+                produtos.append({
+                    "titulo": titulo,
+                    "preco": f"R$ {preco:.2f}",
+                    "link": link + AFILIADO,
+                    "imagem": img
+                })
 
-                        href = link.get("href")
+            except:
+                pass
 
-                        img = (
-                            imagem.get("src")
-                            if imagem else None
-                        )
+    except Exception as e:
 
-                        produtos.append({
-                            "titulo": titulo,
-                            "preco": preco_texto,
-                            "link": href + AFILIADO,
-                            "imagem": img
-                        })
+        print(
+            "ERRO SHOPEE:",
+            repr(e),
+            flush=True
+        )
 
-                    except:
-                        pass
+    # =====================================
+    # AMAZON
+    # =====================================
 
-        except Exception as e:
+    try:
 
-            print(
-                "ERRO SCRAP:",
-                repr(e),
-                flush=True
-            )
+        amazon_produtos = [
+            {
+                "titulo": "Echo Dot 5ª Geração Alexa",
+                "preco": "R$ 299",
+                "link": (
+                    "https://www.amazon.com.br/"
+                ),
+                "imagem": (
+                    "https://m.media-amazon.com/images/I/"
+                    "61u48FEsdBL._AC_SL1000_.jpg"
+                )
+            },
+            {
+                "titulo": "Fire TV Stick HD",
+                "preco": "R$ 249",
+                "link": (
+                    "https://www.amazon.com.br/"
+                ),
+                "imagem": (
+                    "https://m.media-amazon.com/images/I/"
+                    "51TjJOTfslL._AC_SL1000_.jpg"
+                )
+            },
+            {
+                "titulo": "Kindle 11ª Geração",
+                "preco": "R$ 499",
+                "link": (
+                    "https://www.amazon.com.br/"
+                ),
+                "imagem": (
+                    "https://m.media-amazon.com/images/I/"
+                    "61L1ItFgFHL._AC_SL1000_.jpg"
+                )
+            }
+        ]
+
+        produtos.extend(amazon_produtos)
+
+    except Exception as e:
+
+        print(
+            "ERRO AMAZON:",
+            repr(e),
+            flush=True
+        )
 
     return produtos
 
