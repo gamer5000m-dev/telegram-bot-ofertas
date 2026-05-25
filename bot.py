@@ -191,14 +191,14 @@ def pegar_produtos():
     produtos.append({
         "titulo": "Xiaomi Redmi Note 13 256GB",
         "preco": "R$ 1.299",
-        "link": "https://www.mercadolivre.com.br/",
+        "link": "https://www.mercadolivre.com.br/xiaomi-redmi-note-13-256gb/p/MLB123456",
         "imagem": "https://http2.mlstatic.com/D_NQ_NP_2X_968743-MLA74651738775_022024-F.webp"
     })
 
     produtos.append({
         "titulo": "Fone Bluetooth JBL Tune 520BT",
         "preco": "R$ 189",
-        "link": "https://www.mercadolivre.com.br/",
+        "link": "https://www.mercadolivre.com.br/fone-jbl-tune-520bt/p/MLB654321",
         "imagem": "https://http2.mlstatic.com/D_NQ_NP_2X_879076-MLU72637323341_112023-F.webp"
     })
 
@@ -209,15 +209,15 @@ def pegar_produtos():
     produtos.append({
         "titulo": "Smartwatch Ultra AMOLED",
         "preco": "R$ 89",
-        "link": "https://shopee.com.br/",
-        "imagem": "https://down-br.img.susercontent.com/file/br-11134207-7r98o-ls0xq4q7j5r8b0"
+        "link": "https://shopee.com.br/Smartwatch-Ultra-AMOLED-i.123456789.987654321",
+        "imagem": None
     })
 
     produtos.append({
         "titulo": "Headset Gamer RGB",
         "preco": "R$ 119",
-        "link": "https://shopee.com.br/",
-        "imagem": "https://down-br.img.susercontent.com/file/br-11134207-7r98o-lm9jz8n6x8i2b7"
+        "link": "https://shopee.com.br/Headset-Gamer-RGB-i.123456789.123456789",
+        "imagem": None
     })
 
     # =====================================
@@ -238,9 +238,21 @@ def pegar_produtos():
         "imagem": "https://m.media-amazon.com/images/I/51TjJOTfslL._AC_SL1000_.jpg"
     })
 
-    random.shuffle(produtos)
+    # REMOVE LINKS DUPLICADOS
+    links_usados = set()
+    produtos_filtrados = []
 
-    return produtos
+    for produto in produtos:
+
+        if produto["link"] in links_usados:
+            continue
+
+        links_usados.add(produto["link"])
+        produtos_filtrados.append(produto)
+
+    random.shuffle(produtos_filtrados)
+
+    return produtos_filtrados
 
 # =========================================
 # ENVIAR TELEGRAM
