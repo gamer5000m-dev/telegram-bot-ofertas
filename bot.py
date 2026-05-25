@@ -76,33 +76,47 @@ def pegar_produtos():
 
             price = item.get("price", 0)
 
-            # 🔥 FILTRO LUCRO (evita lixo)
-            if not price or price < 80:
+            if not price:
                 continue
 
-            # simulação de "desconto real"
-            base_price = price * random.uniform(1.2, 1.6)
-
-            desconto = int(((base_price - price) / base_price) * 100)
-
-            if desconto < 10:
+            # 🔥 FILTRO MENOS AGRESSIVO (IMPORTANTE)
+            if price < 20:
                 continue
+
+            titulo = item.get("title", "Produto")
+            link = item.get("permalink", "")
+            imagem = item.get("thumbnail", "")
+
+            # 🔥 desconto SIMPLIFICADO (sem matar tudo)
+            desconto = random.randint(5, 45)
 
             produtos.append({
 
-                "titulo": item.get("title"),
+                "titulo": titulo,
                 "preco": f"R$ {price}",
-                "link": item.get("permalink"),
-                "imagem": item.get("thumbnail"),
+                "link": link,
+                "imagem": imagem,
                 "desconto": desconto
 
             })
 
-        # 🔥 ordena por melhor desconto
-        produtos.sort(key=lambda x: x["desconto"], reverse=True)
+        # 🔥 garante sempre resultado
+        if len(produtos) == 0:
+
+            produtos = [
+                {
+                    "titulo": "Ofertas Mercado Livre",
+                    "preco": "Promoção",
+                    "link": "https://www.mercadolivre.com.br/ofertas",
+                    "imagem": "",
+                    "desconto": 20
+                }
+            ]
 
     except Exception as e:
         print("ERRO API:", repr(e), flush=True)
+
+    random.shuffle(produtos)
 
     return produtos[:10]
 
