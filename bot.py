@@ -121,6 +121,10 @@ CREATE TABLE IF NOT EXISTS enviados (
 
 conn.commit()
 
+# LIMPA LINKS ANTIGOS RUINS
+cursor.execute("DELETE FROM enviados")
+conn.commit()
+
 def ja_enviado(link):
 
     cursor.execute(
@@ -194,27 +198,22 @@ def pegar_produtos():
         {
             "titulo": "Echo Dot 5ª Geração Alexa",
             "preco": "R$ 299",
-            "link": "https://www.amazon.com.br/dp/B09B8YWXDF",
-            "imagem": "https://m.media-amazon.com/images/I/61u48FEsdBL._AC_SL1000_.jpg"
+            "link": "https://www.amazon.com.br/dp/B09B8YWXDF"
         },
 
         {
             "titulo": "Fire TV Stick HD",
             "preco": "R$ 249",
-            "link": "https://www.amazon.com.br/dp/B0BJM7K3W3",
-            "imagem": "https://m.media-amazon.com/images/I/51TjJOTfslL._AC_SL1000_.jpg"
+            "link": "https://www.amazon.com.br/dp/B0BJM7K3W3"
         },
 
         {
             "titulo": "Kindle 11ª Geração",
             "preco": "R$ 399",
-            "link": "https://www.amazon.com.br/dp/B09SWW583J",
-            "imagem": "https://m.media-amazon.com/images/I/61L5QgPvgqL._AC_SL1000_.jpg"
+            "link": "https://www.amazon.com.br/dp/B09SWW583J"
         }
 
     ]
-
-    random.shuffle(produtos)
 
     return produtos
 # =========================================
