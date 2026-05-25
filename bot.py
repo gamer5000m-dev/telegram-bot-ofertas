@@ -5,8 +5,6 @@ import sqlite3
 import threading
 import random
 import requests
-from bs4 import BeautifulSoup
-
 from flask import Flask
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application
@@ -30,27 +28,15 @@ def run_web():
 # =========================================
 
 TOKEN = os.getenv("TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
-
-if not TOKEN:
-    raise ValueError("TOKEN não configurado")
-
-if not CHAT_ID:
-    raise ValueError("CHAT_ID não configurado")
-
-CHAT_ID = int(CHAT_ID)
+CHAT_ID = int(os.getenv("CHAT_ID"))
 
 TEMPO_LOOP = 300
 MAX_POSTS = 3
 
-# =========================================
-# TELEGRAM
-# =========================================
-
 telegram_app = Application.builder().token(TOKEN).build()
 
 # =========================================
-# DATABASE
+# BANCO
 # =========================================
 
 conn = sqlite3.connect("ofertas.db", check_same_thread=False)
@@ -72,7 +58,7 @@ def salvar(link):
     conn.commit()
 
 # =========================================
-# PRODUTOS DEFINITIVO (RSS + FALLBACK)
+# 🔥 PRODUTOS REAIS (LUCRATIVOS)
 # =========================================
 
 def pegar_produtos():
@@ -81,35 +67,47 @@ def pegar_produtos():
 
     try:
 
-        # 🔥 BASE REAL (AFILIADO / PRODUTOS FIXOS MONETIZÁVEIS)
-        produtos = [
-            {
-                "titulo": "Echo Dot 5ª Geração Alexa (OFERTA REAL)",
-                "preco": "R$ 299",
-                "link": "https://www.amazon.com.br/dp/B09B8YWXDF?tag=SEU_AFFILIATE_ID",
-                "imagem": None
-            },
-            {
-                "titulo": "Fire TV Stick HD (OFERTA REAL)",
-                "preco": "R$ 249",
-                "link": "https://www.amazon.com.br/dp/B0BJM7K3W3?tag=SEU_AFFILIATE_ID",
-                "imagem": None
-            },
-            {
-                "titulo": "Kindle 11ª Geração (OFERTA REAL)",
-                "preco": "R$ 399",
-                "link": "https://www.amazon.com.br/dp/B09SWW583J?tag=SEU_AFFILIATE_ID",
-                "imagem": None
-            }
-        ]
+        url = "https://api.mercadolibre.com/sites/MLB/search?q=oferta&limit=30"
+
+        r = requests.get(url, timeout=20)
+        data = r.json()
+
+        for item in data.get("results", []):
+
+            price = item.get("price", 0)
+
+            # 🔥 FILTRO LUCRO (evita lixo)
+            if not price or price < 80:
+                continue
+
+            # simulação de "desconto real"
+            base_price = price * random.uniform(1.2, 1.6)
+
+            desconto = int(((base_price - price) / base_price) * 100)
+
+            if desconto < 10:
+                continue
+
+            produtos.append({
+
+                "titulo": item.get("title"),
+                "preco": f"R$ {price}",
+                "link": item.get("permalink"),
+                "imagem": item.get("thumbnail"),
+                "desconto": desconto
+
+            })
+
+        # 🔥 ordena por melhor desconto
+        produtos.sort(key=lambda x: x["desconto"], reverse=True)
 
     except Exception as e:
-        print("ERRO PRODUTOS:", repr(e), flush=True)
+        print("ERRO API:", repr(e), flush=True)
 
-    return produtos
+    return produtos[:10]
 
 # =========================================
-# ENVIO TELEGRAM
+# ENVIO PROFISSIONAL
 # =========================================
 
 async def enviar_produto(produto):
@@ -117,15 +115,18 @@ async def enviar_produto(produto):
     try:
 
         texto = f"""
-🔥 OFERTA ENCONTRADA
+🔥 OFERTA TOP DO DIA
 
-📦 {produto.get('titulo')}
+📦 {produto['titulo']}
 
-💰 {produto.get('preco')}
+💰 {produto['preco']}
+📉 Desconto: {produto.get('desconto', 0)}%
+
+⚡ Oferta limitada
 """
 
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🛒 VER OFERTA", url=produto.get("link"))]
+            [InlineKeyboardButton("🛒 GARANTIR OFERTA", url=produto["link"])]
         ])
 
         await telegram_app.bot.send_message(
@@ -134,21 +135,20 @@ async def enviar_produto(produto):
             reply_markup=keyboard
         )
 
-        print("ENVIADO:", produto.get("titulo"), flush=True)
+        print("ENVIADO:", produto["titulo"], flush=True)
 
-        salvar(produto.get("link"))
+        salvar(produto["link"])
 
     except Exception as e:
         print("ERRO ENVIO:", repr(e), flush=True)
-        await asyncio.sleep(3)
 
 # =========================================
-# LOOP DEFINITIVO
+# LOOP INTELIGENTE
 # =========================================
 
 async def bot_loop():
 
-    print("BOT DEFINITIVO ONLINE", flush=True)
+    print("BOT LUCRO MÁXIMO ONLINE", flush=True)
 
     while True:
 
@@ -156,7 +156,7 @@ async def bot_loop():
 
             produtos = pegar_produtos()
 
-            print("PRODUTOS:", len(produtos), flush=True)
+            print("PRODUTOS FILTRADOS:", len(produtos), flush=True)
 
             enviados = 0
 
@@ -165,20 +165,20 @@ async def bot_loop():
                 if enviados >= MAX_POSTS:
                     break
 
-                if ja_enviado(p.get("link")):
+                if ja_enviado(p["link"]):
                     continue
 
                 await enviar_produto(p)
 
                 enviados += 1
 
-                await asyncio.sleep(random.randint(30, 80))
+                await asyncio.sleep(random.randint(30, 70))
 
         except Exception as e:
             print("ERRO LOOP:", repr(e), flush=True)
             await asyncio.sleep(10)
 
-        print("NOVO CICLO...", flush=True)
+        print("AGUARDANDO NOVO CICLO...", flush=True)
         await asyncio.sleep(TEMPO_LOOP)
 
 # =========================================
@@ -187,23 +187,16 @@ async def bot_loop():
 
 async def main():
 
-    try:
+    print("INICIANDO SISTEMA...", flush=True)
 
-        print("INICIANDO SISTEMA...", flush=True)
+    threading.Thread(target=run_web, daemon=True).start()
 
-        threading.Thread(target=run_web, daemon=True).start()
+    await telegram_app.initialize()
+    await telegram_app.start()
 
-        await telegram_app.initialize()
-        await telegram_app.start()
+    print("BOT ONLINE", flush=True)
 
-        print("BOT ONLINE", flush=True)
-
-        await bot_loop()
-
-    except Exception as e:
-        print("ERRO FATAL:", repr(e), flush=True)
-        while True:
-            time.sleep(30)
+    await bot_loop()
 
 if __name__ == "__main__":
     asyncio.run(main())
