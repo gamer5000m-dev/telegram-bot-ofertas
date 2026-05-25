@@ -81,65 +81,32 @@ def pegar_produtos():
 
     try:
 
-        feeds = [
-            "https://www.magazineluiza.com.br/rss/ofertas",
-            "https://www.americanas.com.br/rss/ofertas"
+        # 🔥 BASE REAL (AFILIADO / PRODUTOS FIXOS MONETIZÁVEIS)
+        produtos = [
+            {
+                "titulo": "Echo Dot 5ª Geração Alexa (OFERTA REAL)",
+                "preco": "R$ 299",
+                "link": "https://www.amazon.com.br/dp/B09B8YWXDF?tag=SEU_AFFILIATE_ID",
+                "imagem": None
+            },
+            {
+                "titulo": "Fire TV Stick HD (OFERTA REAL)",
+                "preco": "R$ 249",
+                "link": "https://www.amazon.com.br/dp/B0BJM7K3W3?tag=SEU_AFFILIATE_ID",
+                "imagem": None
+            },
+            {
+                "titulo": "Kindle 11ª Geração (OFERTA REAL)",
+                "preco": "R$ 399",
+                "link": "https://www.amazon.com.br/dp/B09SWW583J?tag=SEU_AFFILIATE_ID",
+                "imagem": None
+            }
         ]
 
-        for feed in feeds:
-
-            try:
-
-                r = requests.get(
-                    feed,
-                    headers={"User-Agent": "Mozilla/5.0"},
-                    timeout=20
-                )
-
-                if r.status_code != 200:
-                    continue
-
-                soup = BeautifulSoup(r.text, "xml")
-
-                for item in soup.find_all("item"):
-
-                    titulo = item.title.text if item.title else "Produto"
-                    link = item.link.text if item.link else ""
-
-                    produtos.append({
-
-                        "titulo": titulo,
-                        "preco": "OFERTA",
-                        "link": link,
-                        "imagem": None
-
-                    })
-
-            except:
-                continue
-
-        # fallback garantido
-        if not produtos:
-
-            produtos = [
-                {
-                    "titulo": "Ofertas Amazon Brasil",
-                    "preco": "OFERTA",
-                    "link": "https://www.amazon.com.br/gp/goldbox",
-                    "imagem": None
-                },
-                {
-                    "titulo": "Ofertas Mercado Livre",
-                    "preco": "OFERTA",
-                    "link": "https://www.mercadolivre.com.br/ofertas",
-                    "imagem": None
-                }
-            ]
-
     except Exception as e:
-        print("ERRO SISTEMA:", repr(e), flush=True)
+        print("ERRO PRODUTOS:", repr(e), flush=True)
 
-    return produtos[:10]
+    return produtos
 
 # =========================================
 # ENVIO TELEGRAM
