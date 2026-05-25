@@ -4,9 +4,9 @@ import asyncio
 import sqlite3
 import threading
 import random
+import requests
 
 from flask import Flask
-
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application
 
@@ -22,12 +22,7 @@ def home():
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
-    app.run(
-        host="0.0.0.0",
-        port=port,
-        debug=False,
-        use_reloader=False
-    )
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
 
 # =========================================
 # CONFIG
@@ -76,7 +71,7 @@ def salvar(link):
     conn.commit()
 
 # =========================================
-# PRODUTOS (FIXOS ESTÁVEIS)
+# PRODUTOS (MERCADO LIVRE REAL)
 # =========================================
 
 def pegar_produtos():
@@ -85,64 +80,71 @@ def pegar_produtos():
 
     try:
 
-        url = "https://api.mercadolibre.com/sites/MLB/search?q=ofertas&limit=10"
+        url = "https://api.mercadolibre.com/sites/MLB/search?q=oferta&limit=20"
 
         r = requests.get(url, timeout=20)
-
         data = r.json()
 
         for item in data.get("results", []):
 
+            price = item.get("price", 0)
+
+            if not price or price < 50:
+                continue
+
             produtos.append({
 
                 "titulo": item.get("title"),
-                "preco": f"R$ {item.get('price')}",
+                "preco": f"R$ {price}",
                 "link": item.get("permalink"),
                 "imagem": item.get("thumbnail")
 
             })
 
     except Exception as e:
-
         print("ERRO API ML:", repr(e), flush=True)
 
     random.shuffle(produtos)
-
-    return produtos
+    return produtos[:10]
 
 # =========================================
-# ENVIAR TELEGRAM
+# ENVIO TELEGRAM
 # =========================================
 
 async def enviar_produto(produto):
 
-    titulo = produto["titulo"]
-    preco = produto["preco"]
-    link = produto["link"]
-    imagem = produto.get("imagem")
+    try:
 
-    texto = f"""
+        titulo = produto["titulo"]
+        preco = produto["preco"]
+        link = produto["link"]
+        imagem = produto.get("imagem")
+
+        texto = f"""
 🔥 OFERTA ENCONTRADA
 
 📦 {titulo}
 
 💰 {preco}
+
+⚡ Promoção limitada
 """
 
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🛒 COMPRAR AGORA", url=link)]
-    ])
-
-    try:
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🛒 VER OFERTA", url=link)]
+        ])
 
         if imagem:
+
             await telegram_app.bot.send_photo(
                 chat_id=CHAT_ID,
                 photo=imagem,
                 caption=texto,
                 reply_markup=keyboard
             )
+
         else:
+
             await telegram_app.bot.send_message(
                 chat_id=CHAT_ID,
                 text=texto,
@@ -179,26 +181,21 @@ async def bot_loop():
                 if enviados >= MAX_POSTS:
                     break
 
-                if ja_enviado(produto["link"]):
+                if ja_enviado(produto.get("link")):
                     continue
 
                 await enviar_produto(produto)
 
                 enviados += 1
 
-                espera = random.randint(40, 90)
-
-                print(f"ANTI-SPAM: {espera}s", flush=True)
-
-                await asyncio.sleep(espera)
-
-            print("AGUARDANDO NOVO CICLO...", flush=True)
-
-            await asyncio.sleep(TEMPO_LOOP)
+                await asyncio.sleep(random.randint(40, 90))
 
         except Exception as e:
             print("ERRO LOOP:", repr(e), flush=True)
-            await asyncio.sleep(60)
+            await asyncio.sleep(10)
+
+        print("AGUARDANDO CICLO...", flush=True)
+        await asyncio.sleep(TEMPO_LOOP)
 
 # =========================================
 # START
@@ -206,15 +203,23 @@ async def bot_loop():
 
 async def main():
 
-    print("INICIANDO SISTEMA...", flush=True)
+    try:
 
-    threading.Thread(target=run_web, daemon=True).start()
+        print("INICIANDO SISTEMA...", flush=True)
 
-    await telegram_app.initialize()
-    await telegram_app.start()
+        threading.Thread(target=run_web, daemon=True).start()
 
-    await telegram_app.bot.initialize()
+        await telegram_app.initialize()
+        await telegram_app.start()
 
-    print("BOT INICIADO", flush=True)
+        print("BOT ONLINE", flush=True)
 
-    await bot_loop()
+        await bot_loop()
+
+    except Exception as e:
+        print("ERRO FATAL:", repr(e), flush=True)
+        while True:
+            time.sleep(30)
+
+if __name__ == "__main__":
+    asyncio.run(main())
