@@ -82,10 +82,29 @@ def pegar_produtos():
 
         url = "https://api.mercadolibre.com/sites/MLB/search?q=oferta&limit=20"
 
-        r = requests.get(url, timeout=20)
-        data = r.json()
+        r = requests.get(
+            url,
+            timeout=20,
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "application/json"
+            }
+        )
 
-        for item in data.get("results", []):
+        print("STATUS API:", r.status_code, flush=True)
+
+        # 🔥 VERIFICA SE RESPONDEU JSON REAL
+        try:
+            data = r.json()
+        except Exception:
+            print("ERRO: resposta não é JSON", flush=True)
+            return []
+
+        if "results" not in data:
+            print("ERRO: API sem results", flush=True)
+            return []
+
+        for item in data["results"]:
 
             price = item.get("price", 0)
 
@@ -94,17 +113,20 @@ def pegar_produtos():
 
             produtos.append({
 
-                "titulo": item.get("title"),
+                "titulo": item.get("title", "Produto"),
                 "preco": f"R$ {price}",
-                "link": item.get("permalink"),
-                "imagem": item.get("thumbnail")
+                "link": item.get("permalink", ""),
+                "imagem": item.get("thumbnail", "")
 
             })
 
     except Exception as e:
         print("ERRO API ML:", repr(e), flush=True)
 
+    print("DEBUG PRODUTOS BRUTOS:", len(produtos), flush=True)
+
     random.shuffle(produtos)
+
     return produtos[:10]
 
 # =========================================
