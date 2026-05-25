@@ -205,15 +205,8 @@ async def main():
     await telegram_app.initialize()
     await telegram_app.start()
 
+    await telegram_app.bot.initialize()
+
+    print("BOT INICIADO", flush=True)
+
     await bot_loop()
-
-if __name__ == "__main__":
-
-    try:
-        asyncio.run(main())
-
-    except Exception as e:
-        print("ERRO FATAL:", repr(e), flush=True)
-
-        while True:
-            time.sleep(60)
