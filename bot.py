@@ -184,75 +184,119 @@ def pegar_produtos():
 
     produtos = []
 
-    # =====================================
-    # MERCADO LIVRE
-    # =====================================
+    lojas = [
 
-    produtos.append({
-        "titulo": "Xiaomi Redmi Note 13 256GB",
-        "preco": "R$ 1.299",
-        "link": "https://www.mercadolivre.com.br/xiaomi-redmi-note-13-256gb/p/MLB123456",
-        "imagem": "https://http2.mlstatic.com/D_NQ_NP_2X_968743-MLA74651738775_022024-F.webp"
-    })
+        {
+            "url": "https://www.amazon.com.br/gp/goldbox",
+            "base": "https://www.amazon.com.br"
+        },
 
-    produtos.append({
-        "titulo": "Fone Bluetooth JBL Tune 520BT",
-        "preco": "R$ 189",
-        "link": "https://www.mercadolivre.com.br/fone-jbl-tune-520bt/p/MLB654321",
-        "imagem": "https://http2.mlstatic.com/D_NQ_NP_2X_879076-MLU72637323341_112023-F.webp"
-    })
+        {
+            "url": "https://lista.mercadolivre.com.br/ofertas",
+            "base": "https://www.mercadolivre.com.br"
+        },
 
-    # =====================================
-    # SHOPEE
-    # =====================================
+        {
+            "url": "https://shopee.com.br/ofertas",
+            "base": "https://shopee.com.br"
+        }
 
-    produtos.append({
-        "titulo": "Smartwatch Ultra AMOLED",
-        "preco": "R$ 89",
-        "link": "https://shopee.com.br/Smartwatch-Ultra-AMOLED-i.123456789.987654321",
-        "imagem": None
-    })
+    ]
 
-    produtos.append({
-        "titulo": "Headset Gamer RGB",
-        "preco": "R$ 119",
-        "link": "https://shopee.com.br/Headset-Gamer-RGB-i.123456789.123456789",
-        "imagem": None
-    })
+    for loja in lojas:
 
-    # =====================================
-    # AMAZON
-    # =====================================
+        try:
 
-    produtos.append({
-        "titulo": "Echo Dot 5ª Geração Alexa",
-        "preco": "R$ 299",
-        "link": "https://www.amazon.com.br/dp/B09B8YWXDF",
-        "imagem": "https://m.media-amazon.com/images/I/61u48FEsdBL._AC_SL1000_.jpg"
-    })
+            r = requests.get(
+                loja["url"],
+                headers=HEADERS,
+                timeout=20
+            )
 
-    produtos.append({
-        "titulo": "Fire TV Stick HD",
-        "preco": "R$ 249",
-        "link": "https://www.amazon.com.br/dp/B0BJM7K3W3",
-        "imagem": "https://m.media-amazon.com/images/I/51TjJOTfslL._AC_SL1000_.jpg"
-    })
+            soup = BeautifulSoup(
+                r.text,
+                "html.parser"
+            )
 
-    # REMOVE LINKS DUPLICADOS
-    links_usados = set()
-    produtos_filtrados = []
+            links = soup.find_all("a")
 
-    for produto in produtos:
+            for a in links:
 
-        if produto["link"] in links_usados:
+                href = a.get("href")
+
+                if not href:
+                    continue
+
+                titulo = a.get_text(strip=True)
+
+                if len(titulo) < 15:
+                    continue
+
+                # AMAZON
+                if "amazon" in loja["base"]:
+
+                    if "/dp/" not in href:
+                        continue
+
+                # MERCADO LIVRE
+                elif "mercadolivre" in loja["base"]:
+
+                    if "MLB" not in href:
+                        continue
+
+                # SHOPEE
+                elif "shopee" in loja["base"]:
+
+                    if "/product/" not in href and "-i." not in href:
+                        continue
+
+                # LINK COMPLETO
+                if href.startswith("/"):
+
+                    link = loja["base"] + href
+
+                else:
+
+                    link = href
+
+                # REMOVE TRACKING
+                link = link.split("?")[0]
+
+                produtos.append({
+
+                    "titulo": titulo[:120],
+                    "preco": "OFERTA",
+                    "link": link,
+                    "imagem": None
+
+                })
+
+                if len(produtos) >= 30:
+                    break
+
+        except Exception as e:
+
+            print(
+                "ERRO LOJA:",
+                repr(e),
+                flush=True
+            )
+
+    # REMOVE DUPLICADOS
+    vistos = set()
+    filtrados = []
+
+    for p in produtos:
+
+        if p["link"] in vistos:
             continue
 
-        links_usados.add(produto["link"])
-        produtos_filtrados.append(produto)
+        vistos.add(p["link"])
+        filtrados.append(p)
 
-    random.shuffle(produtos_filtrados)
+    random.shuffle(filtrados)
 
-    return produtos_filtrados
+    return filtrados
 
 # =========================================
 # ENVIAR TELEGRAM
@@ -288,7 +332,7 @@ async def enviar_produto(produto):
     try:
 
         # COM IMAGEM
-        if imagem and imagem_valida(imagem):
+        if imagem:
 
             await telegram_app.bot.send_photo(
                 chat_id=CHAT_ID,
