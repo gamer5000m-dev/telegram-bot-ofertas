@@ -187,29 +187,22 @@ def pegar_produtos():
         {
             "titulo": "Echo Dot 5ª Geração Alexa",
             "preco": "R$ 299",
-            "link": "https://amzn.to/3Qexample",
+            "link": "https://www.amazon.com.br/dp/B09B8YWXDF",
             "imagem": "https://m.media-amazon.com/images/I/61u48FEsdBL._AC_SL1000_.jpg"
         },
 
         {
             "titulo": "Fire TV Stick HD",
             "preco": "R$ 249",
-            "link": "https://amzn.to/3Qexample2",
+            "link": "https://www.amazon.com.br/dp/B0BJM7K3W3",
             "imagem": "https://m.media-amazon.com/images/I/51TjJOTfslL._AC_SL1000_.jpg"
         },
 
         {
-            "titulo": "Fone JBL Tune 520BT",
-            "preco": "R$ 189",
-            "link": "https://mercadolivre.com/sec/example",
-            "imagem": "https://http2.mlstatic.com/D_NQ_NP_2X_879076-MLU72637323341_112023-F.webp"
-        },
-
-        {
-            "titulo": "Smartwatch Ultra AMOLED",
-            "preco": "R$ 89",
-            "link": "https://shopee.com.br/product/example",
-            "imagem": "https://cf.shopee.com.br/file/example"
+            "titulo": "Kindle 11ª Geração",
+            "preco": "R$ 399",
+            "link": "https://www.amazon.com.br/dp/B09SWW583J",
+            "imagem": "https://m.media-amazon.com/images/I/61L5QgPvgqL._AC_SL1000_.jpg"
         }
 
     ]
