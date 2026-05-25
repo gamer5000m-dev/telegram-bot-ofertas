@@ -1,253 +1,126 @@
-import os
 import time
-import asyncio
-import sqlite3
 import threading
-import random
 import requests
+import logging
 from flask import Flask
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application
 
 # =========================
-# WEB SERVER (Render)
+# CONFIG
 # =========================
+TELEGRAM_TOKEN = "SEU_TOKEN"
+TELEGRAM_CHAT_ID = "SEU_CHAT_ID"
 
+# =========================
+# LOGS PROFISSIONAIS
+# =========================
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
+
+logger = logging.getLogger("bot")
+
+# =========================
+# FLASK APP
+# =========================
 app = Flask(__name__)
 
 @app.route("/")
 def home():
     return "BOT EMPRESA ONLINE"
 
-def run_web():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+@app.route("/health")
+def health():
+    return {"status": "ok"}
 
 # =========================
-# CONFIG
+# ANTI DUPLICAÇÃO (MEMÓRIA)
 # =========================
+sent_products = set()
 
-TOKEN = os.getenv("TOKEN")
-CHAT_ID = int(os.getenv("CHAT_ID"))
+def is_sent(product_id):
+    return product_id in sent_products
 
-TEMPO_LOOP = 300
-MAX_POSTS = 3
-
-telegram_app = Application.builder().token(TOKEN).build()
-
-# =========================
-# BANCO
-# =========================
-
-conn = sqlite3.connect("enterprise.db", check_same_thread=False)
-cursor = conn.cursor()
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS sent (
-    link TEXT PRIMARY KEY
-)
-""")
-conn.commit()
-
-def already_sent(link):
-    cursor.execute("SELECT 1 FROM sent WHERE link=?", (link,))
-    return cursor.fetchone()
-
-def save(link):
-    cursor.execute("INSERT OR IGNORE INTO sent(link) VALUES(?)", (link,))
-    conn.commit()
+def mark_sent(product_id):
+    sent_products.add(product_id)
 
 # =========================
-# 🔥 MULTI-FONTES REAIS
+# PROVIDERS (SIMULADOS)
 # =========================
-
-def fetch_mercadolivre():
-
-    items = []
-
-    try:
-
-        queries = ["oferta", "desconto", "promoção", "fone", "celular"]
-
-        for q in queries:
-
-            url = f"https://api.mercadolibre.com/sites/MLB/search?q={q}&limit=10"
-
-            r = requests.get(url, timeout=20)
-            data = r.json()
-
-            for item in data.get("results", []):
-
-                price = item.get("price", 0)
-
-                if not price:
-                    continue
-
-                items.append({
-                    "titulo": item.get("title"),
-                    "preco": f"R$ {price}",
-                    "link": item.get("permalink"),
-                    "imagem": item.get("thumbnail"),
-                    "fonte": "Mercado Livre"
-                })
-
-    except Exception as e:
-        print("ML ERROR:", repr(e), flush=True)
-
-    return items
-
-
-def fetch_rss():
-
-    items = []
-
-    feeds = [
-        "https://www.magazineluiza.com.br/rss/ofertas",
-        "https://www.americanas.com.br/rss/ofertas"
+def amazon_products():
+    return [
+        {"id": "amz_001", "title": "Fone Bluetooth Gamer", "price": 79.90, "link": "https://amazon.com"}
     ]
 
-    for feed in feeds:
+def ml_products():
+    return [
+        {"id": "ml_001", "title": "Mouse Gamer RGB", "price": 59.90, "link": "https://mercadolivre.com"}
+    ]
 
-        try:
-            r = requests.get(feed, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
-            soup = None
+def shopee_products():
+    return [
+        {"id": "sh_001", "title": "Teclado Mecânico", "price": 99.90, "link": "https://shopee.com"}
+    ]
 
-            if r.status_code != 200:
-                continue
-
-            soup = BeautifulSoup(r.text, "xml")
-
-            for item in soup.find_all("item"):
-
-                items.append({
-                    "titulo": item.title.text if item.title else "Oferta",
-                    "preco": "OFERTA",
-                    "link": item.link.text if item.link else "",
-                    "imagem": None,
-                    "fonte": "RSS"
-                })
-
-        except:
-            continue
-
-    return items
+SOURCES = [amazon_products, ml_products, shopee_products]
 
 # =========================
-# AGREGADOR INTELIGENTE
+# TELEGRAM
 # =========================
+def send_offer(product):
+    text = f"""
+🔥 OFERTA DO DIA 🔥
 
-def get_products():
+{product['title']}
+💰 R$ {product['price']}
 
-    products = []
-
-    products += fetch_mercadolivre()
-    products += fetch_rss()
-
-    # fallback garantido (NUNCA vazio)
-    if not products:
-
-        products = [
-            {
-                "titulo": "Ofertas do Dia",
-                "preco": "OFERTA",
-                "link": "https://www.mercadolivre.com.br/ofertas",
-                "imagem": None,
-                "fonte": "fallback"
-            }
-        ]
-
-    random.shuffle(products)
-
-    return products[:15]
-
-# =========================
-# ENVIO TELEGRAM
-# =========================
-
-async def send_product(p):
-
-    try:
-
-        text = f"""
-🔥 OFERTA EMPRESA
-
-📦 {p['titulo']}
-💰 {p['preco']}
-📡 Fonte: {p['fonte']}
+👉 {product['link']}
 """
 
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🛒 VER OFERTA", url=p["link"])]
-        ])
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
-        await telegram_app.bot.send_message(
-            chat_id=CHAT_ID,
-            text=text,
-            reply_markup=keyboard
-        )
-
-        print("ENVIADO:", p["titulo"], flush=True)
-
-        save(p["link"])
-
+    try:
+        requests.post(url, data={
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": text
+        })
     except Exception as e:
-        print("SEND ERROR:", repr(e), flush=True)
+        logger.error(f"Telegram error: {e}")
 
 # =========================
-# LOOP EMPRESA
+# WORKER LOOP
 # =========================
-
-async def loop():
-
-    print("BOT EMPRESA ONLINE", flush=True)
+def worker():
+    logger.info("worker_started")
 
     while True:
-
         try:
+            for source in SOURCES:
+                products = source()
 
-            products = get_products()
+                for product in products:
+                    if is_sent(product["id"]):
+                        continue
 
-            print("PRODUTOS:", len(products), flush=True)
+                    send_offer(product)
+                    mark_sent(product["id"])
 
-            sent = 0
+                    logger.info(f"sent: {product['title']}")
 
-            for p in products:
-
-                if sent >= MAX_POSTS:
-                    break
-
-                if already_sent(p["link"]):
-                    continue
-
-                await send_product(p)
-
-                sent += 1
-
-                await asyncio.sleep(random.randint(25, 60))
+            logger.info("cycle_completed")
 
         except Exception as e:
-            print("LOOP ERROR:", repr(e), flush=True)
-            await asyncio.sleep(10)
+            logger.error("worker_error", exc_info=True)
 
-        print("NEW CYCLE...", flush=True)
-        await asyncio.sleep(TEMPO_LOOP)
+        time.sleep(60)
 
 # =========================
-# START
+# START WORKER THREAD
 # =========================
+threading.Thread(target=worker, daemon=True).start()
 
-async def main():
-
-    print("INICIANDO SISTEMA EMPRESA...", flush=True)
-
-    threading.Thread(target=run_web, daemon=True).start()
-
-    await telegram_app.initialize()
-    await telegram_app.start()
-
-    print("BOT EMPRESA ONLINE", flush=True)
-
-    await loop()
-
+# =========================
+# START SERVER
+# =========================
 if __name__ == "__main__":
-    asyncio.run(main())
+    app.run(host="0.0.0.0", port=10000)
