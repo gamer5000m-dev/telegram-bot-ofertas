@@ -34,7 +34,15 @@ def run_web():
 # =========================================
 
 TOKEN = os.getenv("TOKEN")
-CHAT_ID = int(os.getenv("CHAT_ID"))
+CHAT_ID = os.getenv("CHAT_ID")
+
+if not TOKEN:
+    raise ValueError("TOKEN não configurado")
+
+if not CHAT_ID:
+    raise ValueError("CHAT_ID não configurado")
+
+CHAT_ID = int(CHAT_ID)
 
 TEMPO_LOOP = 300
 MAX_POSTS = 3
