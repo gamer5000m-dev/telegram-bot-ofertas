@@ -5,6 +5,7 @@ import sqlite3
 import threading
 import random
 import requests
+from bs4 import BeautifulSoup
 
 from flask import Flask
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -71,7 +72,7 @@ def salvar(link):
     conn.commit()
 
 # =========================================
-# PRODUTOS (MERCADO LIVRE REAL)
+# PRODUTOS DEFINITIVO (RSS + FALLBACK)
 # =========================================
 
 def pegar_produtos():
@@ -80,52 +81,63 @@ def pegar_produtos():
 
     try:
 
-        url = "https://api.mercadolibre.com/sites/MLB/search?q=oferta&limit=20"
+        feeds = [
+            "https://www.magazineluiza.com.br/rss/ofertas",
+            "https://www.americanas.com.br/rss/ofertas"
+        ]
 
-        r = requests.get(
-            url,
-            timeout=20,
-            headers={
-                "User-Agent": "Mozilla/5.0",
-                "Accept": "application/json"
-            }
-        )
+        for feed in feeds:
 
-        print("STATUS API:", r.status_code, flush=True)
+            try:
 
-        # 🔥 VERIFICA SE RESPONDEU JSON REAL
-        try:
-            data = r.json()
-        except Exception:
-            print("ERRO: resposta não é JSON", flush=True)
-            return []
+                r = requests.get(
+                    feed,
+                    headers={"User-Agent": "Mozilla/5.0"},
+                    timeout=20
+                )
 
-        if "results" not in data:
-            print("ERRO: API sem results", flush=True)
-            return []
+                if r.status_code != 200:
+                    continue
 
-        for item in data["results"]:
+                soup = BeautifulSoup(r.text, "xml")
 
-            price = item.get("price", 0)
+                for item in soup.find_all("item"):
 
-            if not price or price < 50:
+                    titulo = item.title.text if item.title else "Produto"
+                    link = item.link.text if item.link else ""
+
+                    produtos.append({
+
+                        "titulo": titulo,
+                        "preco": "OFERTA",
+                        "link": link,
+                        "imagem": None
+
+                    })
+
+            except:
                 continue
 
-            produtos.append({
+        # fallback garantido
+        if not produtos:
 
-                "titulo": item.get("title", "Produto"),
-                "preco": f"R$ {price}",
-                "link": item.get("permalink", ""),
-                "imagem": item.get("thumbnail", "")
-
-            })
+            produtos = [
+                {
+                    "titulo": "Ofertas Amazon Brasil",
+                    "preco": "OFERTA",
+                    "link": "https://www.amazon.com.br/gp/goldbox",
+                    "imagem": None
+                },
+                {
+                    "titulo": "Ofertas Mercado Livre",
+                    "preco": "OFERTA",
+                    "link": "https://www.mercadolivre.com.br/ofertas",
+                    "imagem": None
+                }
+            ]
 
     except Exception as e:
-        print("ERRO API ML:", repr(e), flush=True)
-
-    print("DEBUG PRODUTOS BRUTOS:", len(produtos), flush=True)
-
-    random.shuffle(produtos)
+        print("ERRO SISTEMA:", repr(e), flush=True)
 
     return produtos[:10]
 
@@ -137,56 +149,39 @@ async def enviar_produto(produto):
 
     try:
 
-        titulo = produto["titulo"]
-        preco = produto["preco"]
-        link = produto["link"]
-        imagem = produto.get("imagem")
-
         texto = f"""
 🔥 OFERTA ENCONTRADA
 
-📦 {titulo}
+📦 {produto.get('titulo')}
 
-💰 {preco}
-
-⚡ Promoção limitada
+💰 {produto.get('preco')}
 """
 
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🛒 VER OFERTA", url=link)]
+            [InlineKeyboardButton("🛒 VER OFERTA", url=produto.get("link"))]
         ])
 
-        if imagem:
+        await telegram_app.bot.send_message(
+            chat_id=CHAT_ID,
+            text=texto,
+            reply_markup=keyboard
+        )
 
-            await telegram_app.bot.send_photo(
-                chat_id=CHAT_ID,
-                photo=imagem,
-                caption=texto,
-                reply_markup=keyboard
-            )
+        print("ENVIADO:", produto.get("titulo"), flush=True)
 
-        else:
-
-            await telegram_app.bot.send_message(
-                chat_id=CHAT_ID,
-                text=texto,
-                reply_markup=keyboard
-            )
-
-        print("ENVIADO:", titulo, flush=True)
-
-        salvar(link)
+        salvar(produto.get("link"))
 
     except Exception as e:
         print("ERRO ENVIO:", repr(e), flush=True)
+        await asyncio.sleep(3)
 
 # =========================================
-# LOOP PRINCIPAL
+# LOOP DEFINITIVO
 # =========================================
 
 async def bot_loop():
 
-    print("BOT INICIADO", flush=True)
+    print("BOT DEFINITIVO ONLINE", flush=True)
 
     while True:
 
@@ -198,25 +193,25 @@ async def bot_loop():
 
             enviados = 0
 
-            for produto in produtos:
+            for p in produtos:
 
                 if enviados >= MAX_POSTS:
                     break
 
-                if ja_enviado(produto.get("link")):
+                if ja_enviado(p.get("link")):
                     continue
 
-                await enviar_produto(produto)
+                await enviar_produto(p)
 
                 enviados += 1
 
-                await asyncio.sleep(random.randint(40, 90))
+                await asyncio.sleep(random.randint(30, 80))
 
         except Exception as e:
             print("ERRO LOOP:", repr(e), flush=True)
             await asyncio.sleep(10)
 
-        print("AGUARDANDO CICLO...", flush=True)
+        print("NOVO CICLO...", flush=True)
         await asyncio.sleep(TEMPO_LOOP)
 
 # =========================================
