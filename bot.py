@@ -186,91 +186,81 @@ def pegar_produtos():
 
     try:
 
-        headers = HEADERS.copy()
+        url = "https://lista.mercadolivre.com.br/ofertas"
 
-        headers["User-Agent"] = random.choice([
+        r = requests.get(
+            url,
+            headers=HEADERS,
+            timeout=30
+        )
 
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-            "Mozilla/5.0 (X11; Linux x86_64)",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
+        print(
+            "STATUS ML:",
+            r.status_code,
+            flush=True
+        )
 
-        ])
+        soup = BeautifulSoup(
+            r.text,
+            "html.parser"
+        )
 
-        urls = [
+        cards = soup.find_all("a")
 
-            "https://www.amazon.com.br/gp/goldbox",
-            "https://lista.mercadolivre.com.br/ofertas"
+        for item in cards:
 
-        ]
+            href = item.get("href")
 
-        for url in urls:
+            if not href:
+                continue
 
-            r = requests.get(
-                url,
-                headers=headers,
-                timeout=30
+            if "produto" not in href.lower() and "MLB" not in href:
+                continue
+
+            titulo = item.get_text(
+                strip=True
             )
 
-            print(
-                "STATUS:",
-                url,
-                r.status_code,
-                flush=True
-            )
+            if len(titulo) < 10:
+                continue
 
-            soup = BeautifulSoup(
-                r.text,
-                "html.parser"
-            )
+            produtos.append({
 
-            for a in soup.find_all("a", href=True):
+                "titulo": titulo[:100],
 
-                href = a["href"]
+                "preco": "OFERTA",
 
-                titulo = a.get_text(strip=True)
+                "link": href.split("?")[0],
 
-                if len(titulo) < 20:
-                    continue
+                "imagem": None
 
-                # AMAZON
-                if "amazon" in url:
+            })
 
-                    if "/dp/" not in href:
-                        continue
+        # REMOVE DUPLICADOS
+        unicos = []
+        vistos = set()
 
-                    if href.startswith("/"):
-                        href = "https://www.amazon.com.br" + href
+        for p in produtos:
 
-                # MERCADO LIVRE
-                if "mercadolivre" in url:
+            if p["link"] in vistos:
+                continue
 
-                    if "MLB" not in href:
-                        continue
+            vistos.add(p["link"])
+            unicos.append(p)
 
-                    if href.startswith("/"):
-                        href = "https://www.mercadolivre.com.br" + href
-
-                produtos.append({
-
-                    "titulo": titulo[:100],
-                    "preco": "PROMOÇÃO",
-                    "link": href.split("?")[0],
-                    "imagem": None
-
-                })
-
-                if len(produtos) >= 10:
-                    break
+        produtos = unicos
 
     except Exception as e:
 
         print(
-            "ERRO:",
+            "ERRO ML:",
             repr(e),
             flush=True
         )
 
-    return produtos
+    random.shuffle(produtos)
+
+    return produtos[:10]
 
 # =========================================
 # ENVIAR TELEGRAM
