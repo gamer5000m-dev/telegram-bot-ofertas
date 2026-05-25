@@ -182,75 +182,41 @@ def imagem_valida(url):
 
 def pegar_produtos():
 
-    produtos = []
+    produtos = [
 
-    try:
+        {
+            "titulo": "Echo Dot 5ª Geração Alexa",
+            "preco": "R$ 299",
+            "link": "https://amzn.to/3Qexample",
+            "imagem": "https://m.media-amazon.com/images/I/61u48FEsdBL._AC_SL1000_.jpg"
+        },
 
-        url = "https://api.mercadolibre.com/sites/MLB/search?q=promoção"
+        {
+            "titulo": "Fire TV Stick HD",
+            "preco": "R$ 249",
+            "link": "https://amzn.to/3Qexample2",
+            "imagem": "https://m.media-amazon.com/images/I/51TjJOTfslL._AC_SL1000_.jpg"
+        },
 
-        r = requests.get(
-            url,
-            headers=HEADERS,
-            timeout=30
-        )
+        {
+            "titulo": "Fone JBL Tune 520BT",
+            "preco": "R$ 189",
+            "link": "https://mercadolivre.com/sec/example",
+            "imagem": "https://http2.mlstatic.com/D_NQ_NP_2X_879076-MLU72637323341_112023-F.webp"
+        },
 
-        print(
-            "STATUS API:",
-            r.status_code,
-            flush=True
-        )
+        {
+            "titulo": "Smartwatch Ultra AMOLED",
+            "preco": "R$ 89",
+            "link": "https://shopee.com.br/product/example",
+            "imagem": "https://cf.shopee.com.br/file/example"
+        }
 
-        data = r.json()
-
-        resultados = data.get(
-            "results",
-            []
-        )
-
-        for item in resultados[:10]:
-
-            titulo = item.get(
-                "title",
-                "Produto"
-            )
-
-            preco = item.get(
-                "price",
-                "OFERTA"
-            )
-
-            link = item.get(
-                "permalink"
-            )
-
-            imagem = item.get(
-                "thumbnail"
-            )
-
-            produtos.append({
-
-                "titulo": titulo,
-
-                "preco": f"R$ {preco}",
-
-                "link": link,
-
-                "imagem": imagem
-
-            })
-
-    except Exception as e:
-
-        print(
-            "ERRO API:",
-            repr(e),
-            flush=True
-        )
+    ]
 
     random.shuffle(produtos)
 
     return produtos
-
 # =========================================
 # ENVIAR TELEGRAM
 # =========================================
