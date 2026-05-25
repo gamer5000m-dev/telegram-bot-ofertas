@@ -143,38 +143,45 @@ def salvar(link):
 # VALIDAR IMAGEM
 # =========================================
 
-def imagem_valida(url):
+def pegar_produtos():
 
-    try:
+    produtos = [
 
-        if not url:
-            return False
+        {
+            "titulo": "Echo Dot 5ª Geração Alexa",
+            "preco": "R$ 299",
+            "link": "https://www.amazon.com.br/dp/B09B8YWXDF"
+        },
 
-        if ".svg" in url:
-            return False
+        {
+            "titulo": "Fire TV Stick HD",
+            "preco": "R$ 249",
+            "link": "https://www.amazon.com.br/dp/B0BJM7K3W3"
+        },
 
-        r = requests.get(
-            url,
-            headers=HEADERS,
-            timeout=10,
-            stream=True
-        )
+        {
+            "titulo": "Kindle 11ª Geração",
+            "preco": "R$ 399",
+            "link": "https://www.amazon.com.br/dp/B09SWW583J"
+        }
 
-        if r.status_code != 200:
-            return False
+    ]
 
-        content = r.headers.get(
-            "Content-Type",
-            ""
-        )
+    # REMOVE DUPLICADOS
+    vistos = set()
+    filtrados = []
 
-        if "image" not in content:
-            return False
+    for p in produtos:
 
-        return True
+        if p["link"] in vistos:
+            continue
 
-    except:
-        return False
+        vistos.add(p["link"])
+        filtrados.append(p)
+
+    random.shuffle(filtrados)
+
+    return filtrados
 
 # =========================================
 # PEGAR PRODUTOS
@@ -218,9 +225,7 @@ async def enviar_produto(produto):
 
     titulo = produto["titulo"]
     preco = produto["preco"]
-    desconto = produto.get("desconto", "Oferta")
     link = produto["link"]
-    imagem = produto["imagem"]
 
     texto = f"""
 🔥 OFERTA ENCONTRADA
@@ -228,8 +233,6 @@ async def enviar_produto(produto):
 📦 {titulo}
 
 💰 {preco}
-
-⚡ Promoção por tempo limitado
 """
 
     keyboard = InlineKeyboardMarkup([
@@ -243,24 +246,16 @@ async def enviar_produto(produto):
 
     try:
 
-        # COM IMAGEM
-        if imagem:
+        # ENVIA SOMENTE TEXTO
+        await telegram_app.bot.send_message(
 
-            await telegram_app.bot.send_photo(
-                chat_id=CHAT_ID,
-                photo=imagem,
-                caption=texto,
-                reply_markup=keyboard
-            )
+            chat_id=CHAT_ID,
 
-        # SEM IMAGEM
-        else:
+            text=texto,
 
-            await telegram_app.bot.send_message(
-                chat_id=CHAT_ID,
-                text=texto,
-                reply_markup=keyboard
-            )
+            reply_markup=keyboard
+
+        )
 
         print(
             "ENVIADO:",
