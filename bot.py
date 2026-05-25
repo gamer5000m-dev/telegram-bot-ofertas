@@ -186,7 +186,7 @@ def pegar_produtos():
 
     try:
 
-        url = "https://lista.mercadolivre.com.br/ofertas"
+        url = "https://api.mercadolibre.com/sites/MLB/search?q=promoção"
 
         r = requests.get(
             url,
@@ -195,72 +195,61 @@ def pegar_produtos():
         )
 
         print(
-            "STATUS ML:",
+            "STATUS API:",
             r.status_code,
             flush=True
         )
 
-        soup = BeautifulSoup(
-            r.text,
-            "html.parser"
+        data = r.json()
+
+        resultados = data.get(
+            "results",
+            []
         )
 
-        cards = soup.find_all("a")
+        for item in resultados[:10]:
 
-        for item in cards:
-
-            href = item.get("href")
-
-            if not href:
-                continue
-
-            if "produto" not in href.lower() and "MLB" not in href:
-                continue
-
-            titulo = item.get_text(
-                strip=True
+            titulo = item.get(
+                "title",
+                "Produto"
             )
 
-            if len(titulo) < 10:
-                continue
+            preco = item.get(
+                "price",
+                "OFERTA"
+            )
+
+            link = item.get(
+                "permalink"
+            )
+
+            imagem = item.get(
+                "thumbnail"
+            )
 
             produtos.append({
 
-                "titulo": titulo[:100],
+                "titulo": titulo,
 
-                "preco": "OFERTA",
+                "preco": f"R$ {preco}",
 
-                "link": href.split("?")[0],
+                "link": link,
 
-                "imagem": None
+                "imagem": imagem
 
             })
-
-        # REMOVE DUPLICADOS
-        unicos = []
-        vistos = set()
-
-        for p in produtos:
-
-            if p["link"] in vistos:
-                continue
-
-            vistos.add(p["link"])
-            unicos.append(p)
-
-        produtos = unicos
 
     except Exception as e:
 
         print(
-            "ERRO ML:",
+            "ERRO API:",
             repr(e),
             flush=True
         )
 
     random.shuffle(produtos)
 
-    return produtos[:10]
+    return produtos
 
 # =========================================
 # ENVIAR TELEGRAM
