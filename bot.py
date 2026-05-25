@@ -184,33 +184,38 @@ def pegar_produtos():
 
     produtos = []
 
-    lojas = [
+    try:
 
-        {
-            "url": "https://www.amazon.com.br/gp/goldbox",
-            "base": "https://www.amazon.com.br"
-        },
+        headers = HEADERS.copy()
 
-        {
-            "url": "https://lista.mercadolivre.com.br/ofertas",
-            "base": "https://www.mercadolivre.com.br"
-        },
+        headers["User-Agent"] = random.choice([
 
-        {
-            "url": "https://shopee.com.br/ofertas",
-            "base": "https://shopee.com.br"
-        }
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            "Mozilla/5.0 (X11; Linux x86_64)",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
 
-    ]
+        ])
 
-    for loja in lojas:
+        urls = [
 
-        try:
+            "https://www.amazon.com.br/gp/goldbox",
+            "https://lista.mercadolivre.com.br/ofertas"
+
+        ]
+
+        for url in urls:
 
             r = requests.get(
-                loja["url"],
-                headers=HEADERS,
-                timeout=20
+                url,
+                headers=headers,
+                timeout=30
+            )
+
+            print(
+                "STATUS:",
+                url,
+                r.status_code,
+                flush=True
             )
 
             soup = BeautifulSoup(
@@ -218,85 +223,54 @@ def pegar_produtos():
                 "html.parser"
             )
 
-            links = soup.find_all("a")
+            for a in soup.find_all("a", href=True):
 
-            for a in links:
-
-                href = a.get("href")
-
-                if not href:
-                    continue
+                href = a["href"]
 
                 titulo = a.get_text(strip=True)
 
-                if len(titulo) < 15:
+                if len(titulo) < 20:
                     continue
 
                 # AMAZON
-                if "amazon" in loja["base"]:
+                if "amazon" in url:
 
                     if "/dp/" not in href:
                         continue
 
+                    if href.startswith("/"):
+                        href = "https://www.amazon.com.br" + href
+
                 # MERCADO LIVRE
-                elif "mercadolivre" in loja["base"]:
+                if "mercadolivre" in url:
 
                     if "MLB" not in href:
                         continue
 
-                # SHOPEE
-                elif "shopee" in loja["base"]:
-
-                    if "/product/" not in href and "-i." not in href:
-                        continue
-
-                # LINK COMPLETO
-                if href.startswith("/"):
-
-                    link = loja["base"] + href
-
-                else:
-
-                    link = href
-
-                # REMOVE TRACKING
-                link = link.split("?")[0]
+                    if href.startswith("/"):
+                        href = "https://www.mercadolivre.com.br" + href
 
                 produtos.append({
 
-                    "titulo": titulo[:120],
-                    "preco": "OFERTA",
-                    "link": link,
+                    "titulo": titulo[:100],
+                    "preco": "PROMOÇÃO",
+                    "link": href.split("?")[0],
                     "imagem": None
 
                 })
 
-                if len(produtos) >= 30:
+                if len(produtos) >= 10:
                     break
 
-        except Exception as e:
+    except Exception as e:
 
-            print(
-                "ERRO LOJA:",
-                repr(e),
-                flush=True
-            )
+        print(
+            "ERRO:",
+            repr(e),
+            flush=True
+        )
 
-    # REMOVE DUPLICADOS
-    vistos = set()
-    filtrados = []
-
-    for p in produtos:
-
-        if p["link"] in vistos:
-            continue
-
-        vistos.add(p["link"])
-        filtrados.append(p)
-
-    random.shuffle(filtrados)
-
-    return filtrados
+    return produtos
 
 # =========================================
 # ENVIAR TELEGRAM
