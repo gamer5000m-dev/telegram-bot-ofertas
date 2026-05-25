@@ -73,29 +73,33 @@ def salvar(link):
 
 def pegar_produtos():
 
-    produtos = [
+    produtos = []
 
-        {
-            "titulo": "Echo Dot 5ª Geração Alexa",
-            "preco": "R$ 299",
-            "link": "https://www.amazon.com.br/dp/B09B8YWXDF"
-        },
+    try:
 
-        {
-            "titulo": "Fire TV Stick HD",
-            "preco": "R$ 249",
-            "link": "https://www.amazon.com.br/dp/B0BJM7K3W3"
-        },
+        url = "https://api.mercadolibre.com/sites/MLB/search?q=ofertas&limit=10"
 
-        {
-            "titulo": "Kindle 11ª Geração",
-            "preco": "R$ 399",
-            "link": "https://www.amazon.com.br/dp/B09SWW583J"
-        }
+        r = requests.get(url, timeout=20)
 
-    ]
+        data = r.json()
+
+        for item in data.get("results", []):
+
+            produtos.append({
+
+                "titulo": item.get("title"),
+                "preco": f"R$ {item.get('price')}",
+                "link": item.get("permalink"),
+                "imagem": item.get("thumbnail")
+
+            })
+
+    except Exception as e:
+
+        print("ERRO API ML:", repr(e), flush=True)
 
     random.shuffle(produtos)
+
     return produtos
 
 # =========================================
@@ -107,6 +111,7 @@ async def enviar_produto(produto):
     titulo = produto["titulo"]
     preco = produto["preco"]
     link = produto["link"]
+    imagem = produto.get("imagem")
 
     texto = f"""
 🔥 OFERTA ENCONTRADA
@@ -117,17 +122,24 @@ async def enviar_produto(produto):
 """
 
     keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("🛒 COMPRAR AGORA", url=link)
-        ]
+        [InlineKeyboardButton("🛒 COMPRAR AGORA", url=link)]
     ])
 
     try:
-        await telegram_app.bot.send_message(
-            chat_id=CHAT_ID,
-            text=texto,
-            reply_markup=keyboard
-        )
+
+        if imagem:
+            await telegram_app.bot.send_photo(
+                chat_id=CHAT_ID,
+                photo=imagem,
+                caption=texto,
+                reply_markup=keyboard
+            )
+        else:
+            await telegram_app.bot.send_message(
+                chat_id=CHAT_ID,
+                text=texto,
+                reply_markup=keyboard
+            )
 
         print("ENVIADO:", titulo, flush=True)
 
